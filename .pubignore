@@ -1,0 +1,17 @@
+# Session / credentials
+*.session
+session.dat
+bot.session
+user.session
+*.dat
+*.session.bak
+
+# Test artifacts
+mtflute_test.*
+mtflute_big.*
+mtflute_*.bin
+*.log
+
+# Coverage
+coverage/
+*.lcov

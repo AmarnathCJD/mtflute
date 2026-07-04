@@ -1,0 +1,33 @@
+# Dart
+.dart_tool/
+pubspec.lock
+build/
+.packages
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Session / credentials
+*.session
+session.dat
+bot.session
+user.session
+*.dat
+*.session.bak
+
+# Test artifacts and temp files
+mtflute_test.*
+mtflute_big.*
+mtflute_*.bin
+*.log
+
+# Coverage
+coverage/
+*.lcov

@@ -1,0 +1,93 @@
+# Changelog
+
+## 0.2.0
+
+Streaming engine release. Three deep-audit rounds against a gogram reference (150+ raw findings, ~80 confirmed, ~50 fixed).
+
+### Layer + codegen
+- Bumped Telegram API to **layer 227** (from TDesktop dev).
+- Fixed `tool/tlgen.dart` handling of `{X:Type}` generics and `!X` template refs.
+
+### File streaming
+- New `client.downloadStream(location)` returns `Stream<Uint8List>` (in-order, parallel workers under the hood).
+- New `client.downloadRange(location, start, end)` for arbitrary byte ranges with parallel workers, FILE_MIGRATE + FILE_REFERENCE_EXPIRED handling.
+- New `client.streamMessage(peer, msgId)` and `client.downloadMessageRange(peer, msgId, start, end)` — resolve media via the built-in cache and yield bytes.
+- New `TelegramFileStreamServer` — local HTTP server that publishes any Telegram file as a URL with full **HTTP Range 206** support, HEAD, CORS, seek-aware prefetch, per-entry LRU chunk cache, and per-request cancellation on client disconnect. Feed the URL to `mediakit` / `video_player` / `<video>`.
+- `server.publishMessage(peer, msgId)` returns a stable URL; the chunk cache lives across HTTP requests.
+- `server.warmup(dcId, workers)` pre-opens cross-DC senders so first fetch doesn't pay exportAuth latency.
+- `MediaLocationCache` — LRU keyed by `(peerId, msgId)` → `ResolvedMedia(location, size, mime, dcId, fileName, duration)` with 20h TTL under Telegram's 24h `file_reference` window.
+
+### Session + peer persistence
+- Peer cache (users, channels, chats, usernames) now serialized inside `SessionData` and reloaded on next start — no more re-resolve after app restart.
+- Atomic session write (unique tmp filename + POSIX rename, no delete-then-rename data-loss window).
+- Async debounced flush (2s window) + guaranteed flush on `close()`.
+- String session format now byte-compatible with gogram (`1BvE` + RawURL base64 JSON; legacy `1BvX` also parsed correctly for binary keys via latin1).
+- `SessionData.dcId` always round-trips.
+
+### Reconnect + transport
+- `_ensureReady` waits for in-flight reconnect (bounded by client `timeout`); no more racing double-dials.
+- `_reconnect` is single-flight, uses persisted auth key, exponential backoff with jitter.
+- Ping is fire-and-forget — no leaked pending completers.
+- `bad_msg` codes 32/33/48 drain all pending requests and let `invoke()` transparently retry on the fresh session.
+- `bad_server_salt` transparently retries only the affected request (was killing all pending).
+- Terminal auth errors (AUTH_KEY_UNREGISTERED, etc.) disable autoReconnect; a subsequent successful `loginBot` / `signIn` / `checkPassword` re-enables it.
+- Transport now tracks `lastReadAt`; `_ensureReady` force-reconnects if the socket has been idle >90s (catches silently-dead sockets after Android backgrounding).
+- Transport `close()` wakes stuck reads instead of hanging.
+- Read-idle timeout on transport (75s) surfaces silently-dead peers.
+
+### File upload/download
+- Upload closes RAF only after all worker futures resolve (was closing while siblings still reading).
+- `chunkSize` validated as power-of-2 multiple of 1024 that divides 512 KB.
+- FLOOD_WAIT respected per part.
+- Retries bounded, non-retryable errors (StateError, UnimplementedError) fail fast instead of looping 5 times.
+- Parallel `downloadStream` stops correctly on last chunk (not on any short chunk).
+
+### Crypto + TL correctness
+- TL strings are now UTF-8 (was UTF-16 code units — broke every non-ASCII payload).
+- `bigIntToBytes` fixed: big-endian left-pad, high-order trim (was truncating low bytes / padding wrong side).
+- `auth_key` left-padded to exactly 256 bytes.
+- `writeBytes` refuses payloads > 16 MiB instead of silently truncating.
+
+### Android/Flutter
+- No default relative `sessionFile` — you must pass an absolute path (from `path_provider`).
+- Login callback prompts throw a clear error on mobile instead of using stdin.
+- SIGINT handler uses logger instead of print.
+- Everything runs on `dart:io` only — no `dart:mirrors`/`dart:ffi`/isolates. See `example/flutter_engine.dart` for a ready-to-drop `TgEngine` singleton.
+
+### Cache correctness
+- Access hash preserved when server sends minimal peer without hash.
+- Reverse username mappings pruned on rename.
+- LRU eviction (default 100k users / 20k channels) prevents unbounded growth in long-running engines.
+- `getDifference` backs off on FLOOD_WAIT instead of hammering every 3s.
+
+## 0.1.3
+
+- Fixed DC migration loop: migrate now kills the old poll loop before reconnecting, preventing duplicate pollers and repeated migrations.
+- Migration depth capped at 5 (matching gogram) to prevent infinite recursion.
+- Poll loop and reconnect logic bail immediately during active migration instead of racing.
+
+## 0.1.2
+
+- Fixed reconnect-spam loop: long-poll TCP reads no longer time out at 15s and trigger false reconnects.
+- Reconnect is now single-flight (mutex-guarded), capped at 20 attempts, with exponential backoff (1s → 30s max).
+- Poll loop runs once per client lifetime — no more concurrent pollers spawned per reconnect.
+
+## 0.1.1
+
+- Shorter pub.dev description.
+- Replaced stub example with a real bot quickstart (inline buttons + callback handler).
+- Bumped `pointycastle` to `^4.0.0` and `lints` to `^6.0.0`.
+- Added dartdoc coverage on generated TL types and the main client surface.
+
+## 0.1.0 — first publish
+
+Initial release. Pure-Dart MTProto client against Telegram API layer 225.
+
+- Auth: bot tokens, phone + OTP + 2FA (SRP), string + file sessions
+- Messaging: send/edit/delete/forward/pin, Markdown + HTML parse modes, inline button builder
+- Updates: socket push + getDifference polling, dedup, auto-reconnect with backoff
+- Files: multi-worker parallel up/download, cross-DC sender pool with caching
+- DC migration: transparent on USER/PHONE/FILE/NETWORK_MIGRATE
+- Conversation API, channels admin ops, participant iteration, bot commands, callback/inline answers
+- Logger with TRACE/DEBUG/INFO/WARN/ERROR levels
+- 64 tests: 55 unit + 9 live against Telegram

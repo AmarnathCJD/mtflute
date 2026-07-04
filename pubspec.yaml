@@ -1,0 +1,24 @@
+name: mtflute
+description: Pure-Dart Telegram MTProto client (API layer 227) with a built-in HTTP streaming engine for mediakit / video players.
+version: 0.2.0
+homepage: https://github.com/amarnathcjd/mtflute
+repository: https://github.com/amarnathcjd/mtflute
+issue_tracker: https://github.com/amarnathcjd/mtflute/issues
+
+topics:
+  - telegram
+  - mtproto
+  - bot
+  - messaging
+  - client
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  pointycastle: ^4.0.0
+  crypto: ^3.0.6
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.24.0
