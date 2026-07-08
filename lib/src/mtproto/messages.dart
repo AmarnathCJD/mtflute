@@ -77,10 +77,6 @@ MtpMessage deserializeEncrypted(Uint8List data, Uint8List authKey) {
   return _finishDecrypted(decrypted, authKey, msgKey);
 }
 
-/// Async variant of [deserializeEncrypted]: offloads the (large) AES-IGE
-/// decrypt to a worker isolate so the main isolate stays responsive during
-/// video-chunk downloads. Small payloads decrypt inline (see
-/// [kOffloadDecryptBytes]). Verification/parsing stay on the caller isolate.
 Future<MtpMessage> deserializeEncryptedAsync(
     Uint8List data, Uint8List authKey) async {
   final d = TlDecoder(data);

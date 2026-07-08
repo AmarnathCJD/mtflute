@@ -23,17 +23,8 @@ const _maxDownloadChunk = 1024 * 1024;
 const _bigFileThreshold = 10 * 1024 * 1024;
 const _maxWorkers = 4;
 const _maxRetriesPerPart = 20;
+const _pipelinePerWorker = 4;
 
-// Measured on a high-RTT (~450ms) path to the DC: a single connection cleanly
-// PIPELINES up to ~6 concurrent upload.getFile requests (demuxed by msgId),
-// scaling throughput ~4x, with ZERO drops. Opening many CONNECTIONS at once,
-// by contrast, trips the DC's anti-abuse ("Peer closed connection"). So the
-// throughput lever is pipeline depth per connection, not connection count.
-const _pipelinePerWorker = 3;
-
-/// Round-robins requests across connections, allowing up to
-/// [_pipelinePerWorker] in-flight requests PER connection. Effective
-/// concurrency = workers * _pipelinePerWorker.
 class _WorkerPool {
   final List<MtpClient> workers;
   final List<int> _load;
@@ -71,12 +62,10 @@ class _WorkerPool {
   Future<void> closeAll() async {}
 }
 
-// Connection count stays low (DC drops many connections); pipelining supplies
-// the concurrency. 4 connections * 4 pipeline = up to 16 in-flight requests.
 int _countWorkers(int parts) {
   if (parts <= 2) return 1;
-  if (parts <= 6) return 2;
-  if (parts <= 12) return 3;
+  if (parts <= 4) return 2;
+  if (parts <= 8) return 3;
   return _maxWorkers;
 }
 
@@ -500,10 +489,6 @@ extension FileOperations on MtpClient {
           }
           rethrow;
         } on StateError catch (e) {
-          // A transient reconnect fails in-flight requests with
-          // "reconnect: pending request invalidated" / "Not connected".
-          // These are RETRYABLE (gogram redials + retries the part) — only
-          // the genuine "unexpected: <type>" is fatal.
           final msg = e.toString();
           final retryable = msg.contains('reconnect') ||
               msg.contains('Not connected') ||
@@ -531,10 +516,6 @@ extension FileOperations on MtpClient {
       for (var pos = alignedStart; pos < end; pos += chunkSize) {
         offsets.add(pos);
       }
-      // eagerError:false — let EVERY part settle (each has its own retry loop)
-      // before we surface any error. Prevents a fast-failing part from
-      // orphaning the other in-flight parts, whose later throw would become an
-      // unhandled async exception during a reconnect storm.
       final chunks = await Future.wait(offsets.map(fetchAt), eagerError: false);
 
       final buffer = BytesBuilder();

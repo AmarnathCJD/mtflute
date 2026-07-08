@@ -11,13 +11,6 @@ void _xorInto(Uint8List dst, Uint8List src, int srcOff) {
   }
 }
 
-/// AES-256-IGE encryption as used by MTProto.
-///
-/// Zero per-block heap allocation: operates over the input/output buffers with
-/// a small set of fixed 16-byte scratch buffers reused across every block.
-/// The old implementation allocated ~3 Uint8Lists per 16-byte block (a
-/// `sublist` + `fromList` + an output block), which for a 512 KB payload meant
-/// ~96k allocations and heavy GC pressure on the (single) Dart isolate.
 Uint8List aesIgeEncrypt(Uint8List data, Uint8List key, Uint8List iv) {
   if (data.length % _blockSize != 0) {
     throw ArgumentError('Data length must be a multiple of $_blockSize');
@@ -34,12 +27,9 @@ Uint8List aesIgeEncrypt(Uint8List data, Uint8List key, Uint8List iv) {
   final blockCopy = Uint8List(_blockSize);
 
   for (var i = 0; i < data.length; i += _blockSize) {
-    // blockCopy = plaintext block (needed as next yPrev after we mutate xPrev)
     blockCopy.setRange(0, _blockSize, data, i);
-    // xPrev ^= block
     _xorInto(xPrev, data, i);
     cipher.processBlock(xPrev, 0, enc, 0);
-    // enc ^= yPrev
     for (var j = 0; j < _blockSize; j++) {
       enc[j] ^= yPrev[j];
     }
@@ -50,8 +40,6 @@ Uint8List aesIgeEncrypt(Uint8List data, Uint8List key, Uint8List iv) {
   return out;
 }
 
-/// AES-256-IGE decryption as used by MTProto. See [aesIgeEncrypt] for the
-/// allocation-free rationale.
 Uint8List aesIgeDecrypt(Uint8List data, Uint8List key, Uint8List iv) {
   if (data.length % _blockSize != 0) {
     throw ArgumentError('Data length must be a multiple of $_blockSize');

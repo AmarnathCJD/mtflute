@@ -4,12 +4,6 @@ import 'dart:typed_data';
 
 import 'aes_ige.dart';
 
-/// A pool of long-lived worker isolates that run AES-IGE decryption off the
-/// main isolate. Used for large ciphertexts (file chunks) so the block loop
-/// never blocks UI rendering / the local stream server.
-///
-/// Persistent isolates avoid the ~1-2ms spawn cost of `Isolate.run` per chunk
-/// and the associated churn under sustained video streaming.
 class DecryptPool {
   DecryptPool._();
   static final DecryptPool instance = DecryptPool._();
@@ -44,11 +38,9 @@ class DecryptPool {
     }
   }
 
-  /// Decrypts [data] with AES-IGE using [key]/[iv] on a worker isolate.
   Future<Uint8List> decrypt(Uint8List data, Uint8List key, Uint8List iv) async {
     await _ensure();
     if (_workers.isEmpty) {
-      // Spawn failed (e.g. platform without isolates) — fall back inline.
       return aesIgeDecrypt(data, key, iv);
     }
     final w = _workers[_rr++ % _workers.length];

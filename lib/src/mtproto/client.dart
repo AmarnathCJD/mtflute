@@ -1217,10 +1217,6 @@ class MtpClient {
       return;
     }
 
-    // Large ciphertexts (file chunks) decrypt in a worker isolate so the AES
-    // loop never blocks the main isolate; small ones stay inline. Dispatch is
-    // by msgId into per-request completers, so the isolate hop can't reorder
-    // RPC results.
     final msg = await deserializeEncryptedAsync(data, _authKey!);
     final d = TlDecoder(msg.msg);
     final crc = d.readCrc();

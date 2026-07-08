@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- Tuned `downloadRange` concurrency: 4 connections x 4 pipelined requests each,
+  retuned `_countWorkers` thresholds. Balances throughput against the DC's
+  connection-drop anti-abuse on high-latency mobile paths.
+
 ## 0.2.2
 
 Fixes video playback stability + eliminates player jank. Validated end-to-end
