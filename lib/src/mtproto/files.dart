@@ -21,7 +21,7 @@ typedef FileReferenceRefresher =
 const _defaultChunkSize = 512 * 1024;
 const _maxDownloadChunk = 1024 * 1024;
 const _bigFileThreshold = 10 * 1024 * 1024;
-const _maxWorkers = 4;
+const _maxWorkers = 3;
 const _maxRetriesPerPart = 20;
 const _pipelinePerWorker = 4;
 
@@ -63,15 +63,15 @@ class _WorkerPool {
 }
 
 int _countWorkers(int parts) {
-  if (parts <= 2) return 1;
-  if (parts <= 4) return 2;
-  if (parts <= 8) return 3;
+  if (parts <= 8) return 1;
   return _maxWorkers;
 }
 
 Future<_WorkerPool> _buildPool(MtpClient main, int dcId, int count) async {
   final workers = <MtpClient>[];
   final isSameDc = dcId == main.dcId;
+
+  if (isSameDc) workers.add(main);
 
   final cached = main.getSendersFor(dcId);
   for (final s in cached) {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.4
+
+- `downloadRange` worker pool now puts the primary (main) connection first and
+  always includes it. The primary connection is the most stable; exported
+  sub-DC senders can be dropped by the DC under concurrent load, so preferring
+  the primary eliminates the "Peer closed connection" reconnect churn that was
+  tanking sustained throughput. Retuned `_countWorkers` / `_pipelinePerWorker`
+  for pipelined reads on the primary connection.
+
 ## 0.2.3
 
 - Tuned `downloadRange` concurrency: 4 connections x 4 pipelined requests each,
