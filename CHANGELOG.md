@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.1
+
+Streaming throughput + smoothness fixes (benchmarked on a high-RTT mobile path).
+
+### downloadRange / worker pool
+- Per-connection request **pipelining** (up to 3 concurrent `upload.getFile`
+  per connection, demuxed by msgId) — the previous 1-request-per-worker model
+  capped throughput at ~1 MB/s on high-RTT paths. Measured ~10x improvement
+  (0.3 → 3+ MB/s sustained). Connection count kept low because DCs drop many
+  simultaneous fresh connections; pipelining supplies the concurrency instead.
+- Transient reconnect errors ("reconnect: pending request invalidated",
+  "Not connected", timeouts) are now **retryable** in the part-fetch loop
+  instead of fatally aborting the whole range download.
+- `Future.wait(eagerError: false)` on part fetches so a fast-failing part can't
+  orphan sibling in-flight parts (which previously surfaced as an unhandled
+  async exception during a reconnect storm).
+- `_countWorkers` retuned; retries per part raised to 20 with capped backoff.
+
+### crypto
+- AES-IGE encrypt/decrypt rewritten to be **allocation-free per block** (was
+  ~3 `Uint8List` allocations per 16-byte block → ~96k allocations + heavy GC
+  per 512 KB chunk on the single Dart isolate, a major source of video-player
+  jank / frozen spinners). Verified byte-identical to the previous output.
+
 ## 0.2.0
 
 Streaming engine release. Three deep-audit rounds against a gogram reference (150+ raw findings, ~80 confirmed, ~50 fixed).

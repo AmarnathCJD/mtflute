@@ -22,42 +22,61 @@ const _defaultChunkSize = 512 * 1024;
 const _maxDownloadChunk = 1024 * 1024;
 const _bigFileThreshold = 10 * 1024 * 1024;
 const _maxWorkers = 4;
-const _maxRetriesPerPart = 5;
+const _maxRetriesPerPart = 20;
 
+// Measured on a high-RTT (~450ms) path to the DC: a single connection cleanly
+// PIPELINES up to ~6 concurrent upload.getFile requests (demuxed by msgId),
+// scaling throughput ~4x, with ZERO drops. Opening many CONNECTIONS at once,
+// by contrast, trips the DC's anti-abuse ("Peer closed connection"). So the
+// throughput lever is pipeline depth per connection, not connection count.
+const _pipelinePerWorker = 3;
+
+/// Round-robins requests across connections, allowing up to
+/// [_pipelinePerWorker] in-flight requests PER connection. Effective
+/// concurrency = workers * _pipelinePerWorker.
 class _WorkerPool {
   final List<MtpClient> workers;
-  final List<bool> _busy;
+  final List<int> _load;
   final MtpClient main;
+  int _rr = 0;
 
   _WorkerPool(this.workers, {required this.main})
-    : _busy = List.filled(workers.length, false);
+    : _load = List.filled(workers.length, 0);
 
   Future<MtpClient> acquire() async {
     while (true) {
-      for (var i = 0; i < workers.length; i++) {
-        if (!_busy[i]) {
-          _busy[i] = true;
-          return workers[i];
+      var bestIdx = -1;
+      var bestLoad = 1 << 30;
+      for (var k = 0; k < workers.length; k++) {
+        final i = (_rr + k) % workers.length;
+        if (_load[i] < _pipelinePerWorker && _load[i] < bestLoad) {
+          bestLoad = _load[i];
+          bestIdx = i;
         }
       }
-      await Future.delayed(const Duration(milliseconds: 10));
+      if (bestIdx >= 0) {
+        _load[bestIdx]++;
+        _rr = (bestIdx + 1) % workers.length;
+        return workers[bestIdx];
+      }
+      await Future.delayed(const Duration(milliseconds: 5));
     }
   }
 
   void release(MtpClient w) {
     final idx = workers.indexOf(w);
-    if (idx >= 0) _busy[idx] = false;
+    if (idx >= 0 && _load[idx] > 0) _load[idx]--;
   }
 
-  Future<void> closeAll() async {
-    // No-op: workers are cached on main._senderPool for reuse.
-  }
+  Future<void> closeAll() async {}
 }
 
+// Connection count stays low (DC drops many connections); pipelining supplies
+// the concurrency. 4 connections * 4 pipeline = up to 16 in-flight requests.
 int _countWorkers(int parts) {
-  if (parts < 4) return 1;
-  if (parts < 16) return 2;
-  if (parts < 64) return 3;
+  if (parts <= 2) return 1;
+  if (parts <= 6) return 2;
+  if (parts <= 12) return 3;
   return _maxWorkers;
 }
 
@@ -480,12 +499,27 @@ extension FileOperations on MtpClient {
             continue;
           }
           rethrow;
-        } on StateError {
-          rethrow;
+        } on StateError catch (e) {
+          // A transient reconnect fails in-flight requests with
+          // "reconnect: pending request invalidated" / "Not connected".
+          // These are RETRYABLE (gogram redials + retries the part) — only
+          // the genuine "unexpected: <type>" is fatal.
+          final msg = e.toString();
+          final retryable = msg.contains('reconnect') ||
+              msg.contains('Not connected') ||
+              msg.contains('invalidated') ||
+              msg.contains('timed out') ||
+              msg.contains('Timeout');
+          if (!retryable) rethrow;
+          attempts++;
+          if (attempts >= _maxRetriesPerPart) rethrow;
+          await Future.delayed(
+              Duration(milliseconds: (150 * (1 << attempts)).clamp(150, 4000)));
         } catch (_) {
           attempts++;
           if (attempts >= _maxRetriesPerPart) rethrow;
-          await Future.delayed(Duration(milliseconds: 100 * (1 << attempts)));
+          await Future.delayed(
+              Duration(milliseconds: (150 * (1 << attempts)).clamp(150, 4000)));
         } finally {
           release();
         }
@@ -497,7 +531,11 @@ extension FileOperations on MtpClient {
       for (var pos = alignedStart; pos < end; pos += chunkSize) {
         offsets.add(pos);
       }
-      final chunks = await Future.wait(offsets.map(fetchAt));
+      // eagerError:false — let EVERY part settle (each has its own retry loop)
+      // before we surface any error. Prevents a fast-failing part from
+      // orphaning the other in-flight parts, whose later throw would become an
+      // unhandled async exception during a reconnect storm.
+      final chunks = await Future.wait(offsets.map(fetchAt), eagerError: false);
 
       final buffer = BytesBuilder();
       for (final c in chunks) {
