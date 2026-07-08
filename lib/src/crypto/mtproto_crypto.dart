@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:pointycastle/export.dart';
 
 import 'aes_ige.dart';
+import 'decrypt_pool.dart';
 
 Uint8List sha1(Uint8List data) =>
     Uint8List.fromList(crypto.sha1.convert(data).bytes);
@@ -120,6 +121,23 @@ Uint8List messageKey(
 Uint8List decryptMessage(Uint8List msg, Uint8List authKey, Uint8List msgKey) {
   final keys = aesKeys(msgKey, authKey, decode: true);
   return aesIgeDecrypt(msg, keys.aesKey, keys.aesIv);
+}
+
+// Payloads at/above this size decrypt in a background isolate so the AES-IGE
+// block loop never blocks the main isolate (which renders the UI + drives the
+// local stream server). Small messages (updates/acks/RPC headers) stay inline
+// — an isolate hop would cost more than the decrypt.
+const int kOffloadDecryptBytes = 128 * 1024;
+
+/// Like [decryptMessage] but offloads the AES-IGE work to a worker isolate for
+/// large ciphertexts (file chunks), keeping the main isolate responsive.
+Future<Uint8List> decryptMessageAsync(
+    Uint8List msg, Uint8List authKey, Uint8List msgKey) async {
+  final keys = aesKeys(msgKey, authKey, decode: true);
+  if (msg.length < kOffloadDecryptBytes) {
+    return aesIgeDecrypt(msg, keys.aesKey, keys.aesIv);
+  }
+  return DecryptPool.instance.decrypt(msg, keys.aesKey, keys.aesIv);
 }
 
 ({Uint8List data, Uint8List msgKey}) encryptV1(

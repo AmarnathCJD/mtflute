@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.2
+
+Fixes video playback stability + eliminates player jank. Validated end-to-end
+with ffprobe/ffmpeg against a real streamed file (clean decode mid-file, no
+corruption, faster than realtime).
+
+- **Off-isolate decryption.** Large ciphertexts (file chunks, ≥128 KB) now
+  decrypt in a persistent worker-isolate pool (`decrypt_pool.dart`) instead of
+  on the main isolate. The AES-IGE block loop no longer blocks UI rendering /
+  the local stream server — measured main-isolate stalls dropped from ~90 ms to
+  ~38 ms during sustained streaming. `_processIncoming` / `deserializeEncrypted`
+  gained async variants; small messages still decrypt inline. Dispatch is by
+  msgId so the isolate hop cannot reorder RPC results.
+- **Reconnect no longer crashes downloads.** Transient "pending request
+  invalidated" reconnect errors are retried instead of surfacing as an
+  unhandled async exception (which previously killed the serving connection —
+  the "nothing plays" symptom for HTTP-streamed media).
+
 ## 0.2.1
 
 Streaming throughput + smoothness fixes (benchmarked on a high-RTT mobile path).

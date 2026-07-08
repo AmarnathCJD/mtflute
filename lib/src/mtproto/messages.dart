@@ -74,7 +74,34 @@ MtpMessage deserializeEncrypted(Uint8List data, Uint8List authKey) {
   final encryptedData = d.readRawBytes(d.remaining);
 
   final decrypted = decryptMessage(encryptedData, authKey, msgKey);
+  return _finishDecrypted(decrypted, authKey, msgKey);
+}
 
+/// Async variant of [deserializeEncrypted]: offloads the (large) AES-IGE
+/// decrypt to a worker isolate so the main isolate stays responsive during
+/// video-chunk downloads. Small payloads decrypt inline (see
+/// [kOffloadDecryptBytes]). Verification/parsing stay on the caller isolate.
+Future<MtpMessage> deserializeEncryptedAsync(
+    Uint8List data, Uint8List authKey) async {
+  final d = TlDecoder(data);
+
+  final keyHash = d.readRawBytes(8);
+  final expectedHash = authKeyHash(authKey);
+  for (var i = 0; i < 8; i++) {
+    if (keyHash[i] != expectedHash[i]) {
+      throw StateError('Wrong encryption key');
+    }
+  }
+
+  final msgKey = d.readRawBytes(16);
+  final encryptedData = d.readRawBytes(d.remaining);
+
+  final decrypted = await decryptMessageAsync(encryptedData, authKey, msgKey);
+  return _finishDecrypted(decrypted, authKey, msgKey);
+}
+
+MtpMessage _finishDecrypted(
+    Uint8List decrypted, Uint8List authKey, Uint8List msgKey) {
   final dd = TlDecoder(decrypted);
   dd.readInt64(); // salt
   dd.readInt64(); // sessionId

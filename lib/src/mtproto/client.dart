@@ -1106,7 +1106,7 @@ class MtpClient {
         }
         try {
           final data = await t.readMsg();
-          _processIncoming(data);
+          await _processIncoming(data);
         } catch (e) {
           if (_closing || _migrateInProgress) break;
           if (!autoReconnect) break;
@@ -1210,14 +1210,18 @@ class MtpClient {
     }
   }
 
-  void _processIncoming(Uint8List data) {
+  Future<void> _processIncoming(Uint8List data) async {
     if (!isPacketEncrypted(data)) {
       final msg = deserializeUnencrypted(data);
       _dispatchResponse(msg.msgId, msg.msg);
       return;
     }
 
-    final msg = deserializeEncrypted(data, _authKey!);
+    // Large ciphertexts (file chunks) decrypt in a worker isolate so the AES
+    // loop never blocks the main isolate; small ones stay inline. Dispatch is
+    // by msgId into per-request completers, so the isolate hop can't reorder
+    // RPC results.
+    final msg = await deserializeEncryptedAsync(data, _authKey!);
     final d = TlDecoder(msg.msg);
     final crc = d.readCrc();
 
