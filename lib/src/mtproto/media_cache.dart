@@ -239,6 +239,52 @@ extension MediaResolver on MtpClient {
       refreshLocation: refresher,
     );
   }
+
+  /// Streaming-optimized single-block fetch.
+  ///
+  /// Downloads one [blockSize]-aligned block (block [blockIndex]) of the media
+  /// on message [msgId], clamped to the file's real size. Uses the primary
+  /// connection with the proven 512 KB pipelined sub-chunk config — the
+  /// configuration measured fastest and most drop-resistant for serialized
+  /// byte-range streaming (a local HTTP shim feeding a player). Wraps
+  /// [downloadMessageRange] with the offset/clamp math a range server would
+  /// otherwise have to repeat, and shares the same [cache] and file_reference
+  /// refresher.
+  ///
+  /// Returns an empty list if [blockIndex] starts at or past end-of-file.
+  Future<Uint8List> downloadBlock({
+    required InputPeer peer,
+    required int msgId,
+    required int blockIndex,
+    int blockSize = 1024 * 1024,
+    int subChunkSize = 512 * 1024,
+    MediaLocationCache? cache,
+  }) async {
+    if (blockIndex < 0) throw ArgumentError('blockIndex must be non-negative');
+    final store = cache ?? mediaCache;
+    final resolved = await resolveMediaByMessage(
+      peer: peer,
+      msgId: msgId,
+      cache: store,
+    );
+    if (resolved == null) {
+      throw StateError('message $msgId has no downloadable media');
+    }
+    final size = resolved.size;
+    final start = blockIndex * blockSize;
+    if (size > 0 && start >= size) return Uint8List(0);
+    var end = start + blockSize;
+    if (size > 0 && end > size) end = size;
+    if (end <= start) return Uint8List(0);
+    return downloadMessageRange(
+      peer: peer,
+      msgId: msgId,
+      start: start,
+      end: end,
+      cache: store,
+      chunkSize: subChunkSize,
+    );
+  }
 }
 
 void _updatePeerCache(MtpClient c, List<User> users, List<Chat> chats) {

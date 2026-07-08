@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.5
+
+- New `client.downloadBlock(peer:, msgId:, blockIndex:)` — a streaming-optimized
+  single-block fetch for local range servers. Downloads one aligned block
+  (default 1 MB) clamped to the file's real size, over the primary connection
+  with the 512 KB pipelined sub-chunk config that benchmarked fastest and most
+  drop-resistant for serialized byte-range streaming (a local HTTP shim feeding
+  a player: 512 KB sub-chunks pipeline two `Upload.getFile` per block ≈ 1.4 MB/s
+  vs ≈ 0.9 MB/s for a single 1 MB request). Wraps `downloadMessageRange` with
+  the offset/clamp math a range server would otherwise repeat, sharing the same
+  media cache and `file_reference` refresher. Returns an empty list past EOF.
+
 ## 0.2.4
 
 - `downloadRange` worker pool now puts the primary (main) connection first and
