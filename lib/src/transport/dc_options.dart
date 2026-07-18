@@ -45,17 +45,31 @@ const defaultDcOptions = [
   ),
 ];
 
+/// Returns `host:port`. IPv6 hosts are bracketed so the port is unambiguous
+/// and [dcHostPort] can split them back apart.
 String getDcAddress(int dcId, {bool ipv6 = false}) {
   final dc = defaultDcOptions.firstWhere(
     (d) => d.id == dcId,
     orElse: () => defaultDcOptions[1],
   );
-  final ip = ipv6 ? dc.ipv6 : dc.ipv4;
-  return '$ip:${dc.port}';
+  if (ipv6) return '[${dc.ipv6}]:${dc.port}';
+  return '${dc.ipv4}:${dc.port}';
+}
+
+/// Splits a `host:port` (or `[ipv6]:port`) address into its host and port.
+(String host, int port) dcHostPort(String addr) {
+  if (addr.startsWith('[')) {
+    final end = addr.indexOf(']');
+    final host = addr.substring(1, end);
+    final port = int.parse(addr.substring(end + 2));
+    return (host, port);
+  }
+  final idx = addr.lastIndexOf(':');
+  return (addr.substring(0, idx), int.parse(addr.substring(idx + 1)));
 }
 
 int dcIdFromAddress(String addr) {
-  final host = addr.split(':').first;
+  final (host, _) = dcHostPort(addr);
   for (final dc in defaultDcOptions) {
     if (dc.ipv4 == host || dc.ipv6 == host) return dc.id;
   }

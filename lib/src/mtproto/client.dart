@@ -259,7 +259,7 @@ class MtpClient {
 
   Future<void> _doConnect() async {
     final addr = getDcAddress(dcId, ipv6: ipv6);
-    final parts = addr.split(':');
+    final (host, port) = dcHostPort(addr);
 
     final oldTransport = _transport;
     _transport = null;
@@ -270,8 +270,8 @@ class MtpClient {
     }
 
     _transport = TcpTransport(
-      host: parts[0],
-      port: int.parse(parts[1]),
+      host: host,
+      port: port,
       modeVariant: TransportModeVariant.abridged,
       timeout: timeout,
     );
@@ -533,6 +533,8 @@ class MtpClient {
   int _pts = 0;
   int _qts = 0;
   int _date = 0;
+  final Map<int, int> _channelPts = {};
+  final Set<int> _channelDiffInFlight = {};
   bool _updatesRunning = false;
   bool _diffInFlight = false;
   bool _timersPaused = false;
@@ -573,9 +575,10 @@ class MtpClient {
         return;
       }
       await _fireAndForget(
-        PingRequest(
+        PingDelayDisconnectRequest(
           pingId:
               randomBytes(8).buffer.asByteData().getInt64(0, Endian.little),
+          disconnectDelay: 75,
         ),
       );
     });
@@ -593,10 +596,14 @@ class MtpClient {
       }
       _diffInFlight = true;
       try {
-        final diff = await invoke(
-          UpdatesGetDifferenceRequest(pts: _pts, date: _date, qts: _qts),
-        );
-        _applyDifference(diff);
+        for (var i = 0; i < 20; i++) {
+          if (_pts == 0 || _date == 0) break;
+          final diff = await invoke(
+            UpdatesGetDifferenceRequest(pts: _pts, date: _date, qts: _qts),
+          );
+          final more = _applyDifference(diff);
+          if (!more) break;
+        }
         _diffBackoffUntil = null;
       } on TgError catch (e) {
         if (e.isFlood && e.waitDuration != null) {
@@ -623,10 +630,12 @@ class MtpClient {
     _updatesRunning = false;
   }
 
-  void _applyDifference(TlObject diff) {
+  /// Applies one getDifference result. Returns true when the caller should
+  /// call getDifference again immediately (a slice, or a too-long reset).
+  bool _applyDifference(TlObject diff) {
     if (diff is UpdatesDifferenceEmpty) {
       _date = diff.date;
-      _seqOrDate(diff.seq);
+      return false;
     } else if (diff is UpdatesDifferenceObj) {
       cache.updateFromUsers(diff.users);
       cache.updateFromChats(diff.chats);
@@ -642,6 +651,7 @@ class MtpClient {
         _qts = s.qts;
         _date = s.date;
       }
+      return false;
     } else if (diff is UpdatesDifferenceSlice) {
       cache.updateFromUsers(diff.users);
       cache.updateFromChats(diff.chats);
@@ -657,12 +667,74 @@ class MtpClient {
         _qts = s.qts;
         _date = s.date;
       }
+      return true;
     } else if (diff is UpdatesDifferenceTooLong) {
       _pts = diff.pts;
+      return false;
     }
+    return false;
   }
 
-  void _seqOrDate(int _) {}
+  Future<void> _fetchChannelDifference(int channelId, {int? startPts}) async {
+    if (_channelDiffInFlight.contains(channelId)) return;
+    final accessHash = cache.getChannelAccessHash(channelId);
+    if (accessHash == 0 && startPts == null) return;
+    _channelDiffInFlight.add(channelId);
+    try {
+      var pts = startPts ?? _channelPts[channelId] ?? 1;
+      final channel = InputChannelObj(
+        channelId: channelId,
+        accessHash: accessHash,
+      );
+      for (var i = 0; i < 20; i++) {
+        final TlObject diff;
+        try {
+          diff = await invoke(
+            UpdatesGetChannelDifferenceRequest(
+              force: false,
+              channel: channel,
+              filter: ChannelMessagesFilterEmpty(),
+              pts: pts,
+              limit: 100,
+            ),
+          );
+        } on TgError {
+          break;
+        }
+        if (diff is UpdatesChannelDifferenceObj) {
+          cache.updateFromUsers(diff.users);
+          cache.updateFromChats(diff.chats);
+          for (final m in diff.newMessages) {
+            _handleNewMessage(m);
+          }
+          for (final u in diff.otherUpdates) {
+            _dispatchUpdate(u);
+          }
+          pts = diff.pts;
+          _channelPts[channelId] = pts;
+          if (diff.final_) break;
+        } else if (diff is UpdatesChannelDifferenceEmpty) {
+          _channelPts[channelId] = diff.pts;
+          break;
+        } else if (diff is UpdatesChannelDifferenceTooLong) {
+          for (final m in diff.messages) {
+            _handleNewMessage(m);
+          }
+          cache.updateFromUsers(diff.users);
+          cache.updateFromChats(diff.chats);
+          final dlg = diff.dialog;
+          if (dlg is DialogObj && dlg.pts != null) {
+            _channelPts[channelId] = dlg.pts!;
+          }
+          break;
+        } else {
+          break;
+        }
+      }
+    } finally {
+      _channelDiffInFlight.remove(channelId);
+    }
+  }
 
   // ---------- Auth: Phone ----------
 
@@ -864,14 +936,40 @@ class MtpClient {
     _updateHandlers.remove(handler);
   }
 
+  int? _channelIdOf(Message msg) {
+    if (msg is MessageObj) {
+      final p = msg.peerId;
+      if (p is PeerChannel) return p.channelId;
+    } else if (msg is MessageService) {
+      final p = msg.peerId;
+      if (p is PeerChannel) return p.channelId;
+    }
+    return null;
+  }
+
   void _dispatchUpdate(TlObject update) {
     for (final handler in _updateHandlers) {
       handler(update);
     }
 
+    if (update is UpdateChannelTooLong) {
+      unawaited(_fetchChannelDifference(update.channelId, startPts: update.pts));
+      return;
+    }
+
     if (update is UpdateNewMessage) {
       _handleNewMessage(update.message);
     } else if (update is UpdateNewChannelMessage) {
+      final channelId = _channelIdOf(update.message);
+      if (channelId != null) {
+        final have = _channelPts[channelId];
+        final expected = update.pts - update.ptsCount;
+        if (have != null && expected > have) {
+          unawaited(_fetchChannelDifference(channelId));
+          return;
+        }
+        _channelPts[channelId] = update.pts;
+      }
       _handleNewMessage(update.message);
     } else if (update is UpdateBotCallbackQuery &&
         _callbackQueryHandlers.isNotEmpty) {
@@ -994,15 +1092,46 @@ class MtpClient {
   }
 
   Future<void> logOut() async {
-    await invoke(AuthLogOutRequest());
+    try {
+      await invoke(AuthLogOutRequest());
+    } catch (_) {}
+    _authKey = null;
+    _serverSalt = 0;
+    _authorizedOnce = false;
+    autoReconnect = false;
+    _sessionDirty = false;
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
+    cache.clear();
+    final sf = sessionFile;
+    if (sf != null) {
+      try {
+        final f = File(sf);
+        if (f.existsSync()) f.deleteSync();
+      } catch (_) {}
+    }
   }
 
   // ---------- Transport internals ----------
 
+  /// Requests larger than this are gzip-packed before sending, per the spec's
+  /// recommendation to compress large queries.
+  static const _gzipSendThreshold = 512;
+
   Future<Uint8List> _sendTlObject(TlObject obj) async {
     final encoder = TlEncoder();
     obj.encode(encoder);
-    return _sendRawRequest(encoder.toBytes());
+    return _sendRawRequest(_maybeGzip(encoder.toBytes()));
+  }
+
+  Uint8List _maybeGzip(Uint8List payload) {
+    if (payload.length < _gzipSendThreshold) return payload;
+    final packed = Uint8List.fromList(gzip.encode(payload));
+    if (packed.length >= payload.length) return payload;
+    final e = TlEncoder();
+    e.writeCrc(crcGzipPacked);
+    e.writeBytes(packed);
+    return e.toBytes();
   }
 
   Future<void> _fireAndForget(TlObject obj, {bool contentRelated = false}) async {
@@ -1384,12 +1513,39 @@ class MtpClient {
         }
         return true;
 
+      case crcMsgDetailedInfo:
+        d.readInt64(); // msg_id
+        final answerId = d.readInt64();
+        _forceAck(answerId);
+        return true;
+
+      case crcMsgNewDetailedInfo:
+        final answerId = d.readInt64();
+        _forceAck(answerId);
+        return true;
+
+      case crcMsgsStateReq:
+        d.readCrc(); // vector
+        final n = d.readUint32();
+        for (var i = 0; i < n; i++) {
+          _forceAck(d.readInt64());
+        }
+        return true;
+
       case crcMsgsAck || crcPong:
         return true;
 
       default:
         return false;
     }
+  }
+
+  void _forceAck(int msgId) {
+    _pendingAcks.add(msgId);
+    _ackTimer ??= Timer(const Duration(milliseconds: 300), () {
+      _ackTimer = null;
+      _flushAcks();
+    });
   }
 
   bool _debugUpdates = false;

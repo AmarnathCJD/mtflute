@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0
+
+New MTProto features found by a deep missing-feature audit against the official docs.
+
+### Updates
+- `channels.getChannelDifference`: per-channel `pts` is now tracked and gaps are recovered via `getChannelDifference` (channels have their own message box; the common `getDifference` never returns channel messages). Handles `UpdatesChannelDifference` / `Empty` / `TooLong`.
+- `updateChannelTooLong` now triggers a channel-difference catch-up instead of being dropped.
+- `getDifference` now loops on `updates.differenceSlice` until it drains, instead of applying a single slice and stopping.
+- Channel-message gap detection from `pts` / `pts_count` on `updateNewChannelMessage`.
+
+### Service messages
+- `msg_detailed_info` / `msg_new_detailed_info` are acknowledged (the server otherwise re-sends the notification indefinitely).
+- `msgs_state_req` is answered by acking the referenced message ids.
+- The periodic keepalive is now `ping_delay_disconnect` (75s), so the server also reaps a half-open connection if the client goes silent.
+
+### Outgoing
+- Requests larger than 512 bytes are `gzip_packed` before sending, per the spec's recommendation to compress large queries.
+
+### Transport
+- IPv6 endpoints are bracketed (`[addr]:port`) so the port is unambiguous; address parsing no longer breaks on the colons in IPv6.
+
+### Auth / media
+- `logOut()` now invalidates the auth key, clears the peer cache, and deletes the persisted session file.
+- `inflateStrippedThumb()` reconstructs a full JPEG from a `photoStrippedSize` thumbnail.
+
 ## 0.2.9
 
 Stability under parallel file transfer, plus a round of MTProto spec-conformance fixes.

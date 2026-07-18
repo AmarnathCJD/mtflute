@@ -155,6 +155,15 @@ class PeerCache {
     'usernames': _usernames,
   };
 
+  void clear() {
+    _users.clear();
+    _channels.clear();
+    _chats.clear();
+    _usernames.clear();
+    _userLru.clear();
+    _channelLru.clear();
+  }
+
   void loadJson(Map<String, dynamic> json) {
     final users = json['users'] as Map<String, dynamic>?;
     if (users != null) {

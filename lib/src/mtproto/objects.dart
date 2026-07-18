@@ -28,6 +28,10 @@ const crcMessageContainer = 0x73f1f8dc;
 const crcRpcResult = 0xf35c6d01;
 const crcRpcError = 0x2144ca19;
 const crcGzipPacked = 0x3072cfa1;
+const crcMsgDetailedInfo = 0x276d3ec6;
+const crcMsgNewDetailedInfo = 0x809db6df;
+const crcMsgsStateReq = 0xda69fb52;
+const crcPingDelayDisconnect = 0xf3427b8c;
 
 class ResPQ {
   final BigInt nonce;
