@@ -290,9 +290,12 @@ extension FileOperations on MtpClient {
     ProgressCallback? onProgress,
     FileReferenceRefresher? refreshLocation,
   }) async* {
-    if (chunkSize <= 0 || chunkSize % 4096 != 0 || chunkSize > _maxDownloadChunk) {
+    if (chunkSize <= 0 ||
+        chunkSize % 4096 != 0 ||
+        chunkSize > _maxDownloadChunk ||
+        (1048576 % chunkSize) != 0) {
       throw ArgumentError(
-        'chunkSize must be a positive multiple of 4096 and <= 1MB',
+        'chunkSize must be a positive multiple of 4096 that divides 1MB (<= 1MB)',
       );
     }
     final effectiveDc = dcId == 0 ? this.dcId : dcId;
@@ -359,7 +362,8 @@ extension FileOperations on MtpClient {
         } catch (_) {
           attempts++;
           if (attempts >= _maxRetriesPerPart) rethrow;
-          await Future.delayed(Duration(milliseconds: 100 * (1 << attempts)));
+          final backoff = 100 * (1 << attempts.clamp(0, 6));
+          await Future.delayed(Duration(milliseconds: backoff));
         } finally {
           release();
         }
@@ -383,7 +387,10 @@ extension FileOperations on MtpClient {
         return;
       }
 
-      // Parallel fetch, deliver in order.
+      // Parallel fetch, deliver in order. Keep up to workers*pipeline chunks
+      // in flight so each connection is kept busy (pipelined) rather than
+      // idling between round-trips.
+      final inFlightWindow = workers * _pipelinePerWorker;
       final results = List<Future<Uint8List>?>.filled(totalParts, null);
       var nextToSchedule = 0;
       var nextToYield = 0;
@@ -391,7 +398,7 @@ extension FileOperations on MtpClient {
 
       void scheduleMore() {
         while (nextToSchedule < totalParts &&
-            (nextToSchedule - nextToYield) < workers) {
+            (nextToSchedule - nextToYield) < inFlightWindow) {
           results[nextToSchedule] = fetchChunk(nextToSchedule);
           nextToSchedule++;
         }
@@ -432,6 +439,14 @@ extension FileOperations on MtpClient {
   }) async {
     if (start < 0 || end <= start) {
       throw ArgumentError('bad range [$start,$end)');
+    }
+    if (chunkSize <= 0 ||
+        chunkSize % 4096 != 0 ||
+        chunkSize > _maxDownloadChunk ||
+        (1048576 % chunkSize) != 0) {
+      throw ArgumentError(
+        'chunkSize must be a positive multiple of 4096 that divides 1MB (<= 1MB)',
+      );
     }
     final alignedStart = start - (start % chunkSize);
     final length = end - start;

@@ -98,16 +98,11 @@ Future<AuthKeyResult> performHandshake({
     );
   }
 
-  // RSA encrypt
   final hashAndMsg = Uint8List(255);
   final innerHash = sha1(innerData);
   hashAndMsg.setRange(0, innerHash.length, innerHash);
   hashAndMsg.setRange(
-    innerHash.length,
-    innerHash.length + innerData.length,
-    innerData,
-  );
-
+      innerHash.length, innerHash.length + innerData.length, innerData);
   final encryptedInner = rsaEncrypt(hashAndMsg, rsaKey);
 
   // Step 3: req_DH_params

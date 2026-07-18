@@ -129,10 +129,12 @@ void main() {
     });
 
     test('bigIntToBytes pads correctly', () {
+      // bigIntToBytes is big-endian, left-padded with zeros.
       final val = BigInt.from(0xff);
       final bytes = bigIntToBytes(val, 8);
       expect(bytes.length, 8);
-      expect(bytes[0], 0xff);
+      expect(bytes[7], 0xff);
+      expect(bytes[0], 0);
     });
   });
 }

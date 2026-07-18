@@ -4,6 +4,16 @@ import 'dart:typed_data';
 
 import 'transport_mode.dart';
 
+/// A transport-level error frame (4-byte negative int32). The [code] is the
+/// positive spec error code, e.g. 404 (auth_key not found), 429 (transport
+/// flood), 400 (bad request).
+class TransportError implements Exception {
+  final int code;
+  const TransportError(this.code);
+  @override
+  String toString() => 'TransportError($code)';
+}
+
 /// Low-level TCP transport for MTProto.
 ///
 /// A single reader/writer pair over a [Socket]. Frames follow the selected
@@ -151,14 +161,27 @@ class TcpTransport {
       throw _closeReason ?? const SocketException('Not connected');
     }
 
+    Uint8List data;
     if (_mode is AbridgedMode) {
-      return _readAbridged();
+      data = await _readAbridged();
     } else if (_mode is IntermediateMode || _mode is PaddedIntermediateMode) {
-      return _readIntermediate();
+      data = await _readIntermediate();
     } else if (_mode is FullMode) {
-      return _readFull();
+      data = await _readFull();
+    } else {
+      throw UnsupportedError('Unknown transport mode');
     }
-    throw UnsupportedError('Unknown transport mode');
+
+    if (data.length == 4) {
+      final code = ByteData.view(data.buffer, data.offsetInBytes)
+          .getInt32(0, Endian.little);
+      if (code < 0) {
+        final err = TransportError(-code);
+        _fail(err);
+        throw err;
+      }
+    }
+    return data;
   }
 
   Future<Uint8List> _readAbridged() async {

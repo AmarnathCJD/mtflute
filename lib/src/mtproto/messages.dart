@@ -116,6 +116,14 @@ MtpMessage _finishDecrypted(
     }
   }
 
+  final padLen = decrypted.length - 32 - msgLen;
+  if (msgLen % 4 != 0 ||
+      32 + msgLen > decrypted.length ||
+      padLen < 12 ||
+      padLen > 1024) {
+    throw StateError('Invalid MTProto message length/padding');
+  }
+
   final msg = dd.readRawBytes(msgLen);
   return MtpMessage(msg: msg, msgId: msgId, seqNo: seqNo);
 }

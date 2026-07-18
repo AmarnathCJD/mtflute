@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.9
+
+Stability under parallel file transfer, plus a round of MTProto spec-conformance fixes.
+
+### Stability
+- Fixed an unhandled async error crash: `connect()`'s single-flight gate completed with an error that had no listener when `_doConnect` failed and no concurrent caller was waiting, killing the isolate mid-download.
+- Outgoing `msgs_ack`: the client now acknowledges content-related server messages (odd seqno), batched at a threshold of 10 with a 300ms flush timer. Missing acks made the server resend and drop connections under sustained load ("Peer closed connection").
+- `invoke` now retries transient network / reconnect / salt errors within a 2-minute budget instead of giving up after 3 tries, so a flapping worker recovers instead of throwing.
+- Reconnect backoff is flap-aware: a connection that dies seconds after connecting no longer reconnects at full speed; the delay escalates with the flap count.
+- Download now keeps `workers × pipeline` chunks in flight (pipelined) rather than just `workers`.
+
+### MTProto spec conformance
+- Decrypt now validates the message length and padding (length divisible by 4, padding in [12,1024], no read past the buffer) per the security guidelines, replacing an uncontrolled `RangeError` with a clean protocol error.
+- Container inner messages now handle `bad_server_salt` / `new_session_created` / `bad_msg_notification` / `pong` / `msgs_ack`, not just `rpc_result` — previously service messages wrapped in a container were ignored.
+- `gzip_packed` is now unwrapped when it appears as an update body (top-level or inside a container).
+- 4-byte transport-error frames (e.g. `-404`) are detected in the transport and surfaced as `TransportError`.
+- `_lastMsgId` is reset after a `bad_msg` 16/17 time correction so the monotonicity clamp doesn't pin new ids to the pre-correction clock.
+- DH handshake now verifies `dh_prime` is a safe prime (Miller-Rabin on `p` and `(p-1)/2`) and that the generator `g` satisfies its quadratic-residue condition; `g_b` gets the same `2^1984` range bound as `g_a`.
+- Download `chunkSize` must now divide 1 MB (in addition to being a multiple of 4096, ≤ 1 MB) so no request crosses a 1 MB boundary.
+
 ## 0.2.8
 
 - Fixed `MSGID_DECREASE_RETRY` when a caller mixes parallel worker RPCs (via `threads: >1` on `uploadFile` / `downloadStream` / `downloadRange`) with main-connection RPCs. `copyAuthFrom` now copies the parent's `_timeOffset` so same-DC sub-clients agree with main on encoded msg-id timestamps.

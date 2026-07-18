@@ -62,8 +62,11 @@ void main() {
     });
 
     test('validateGB accepts valid value', () {
-      final prime = BigInt.from(1000);
-      expect(() => validateGB(BigInt.from(500), prime), returnsNormally);
+      // g_b must lie in [2^1984, dh_prime - 2^1984] per the security
+      // guidelines, so use a realistic 2048-bit prime and mid-range g_b.
+      final prime = (BigInt.one << 2048) - BigInt.one;
+      final gB = BigInt.one << 2000;
+      expect(() => validateGB(gB, prime), returnsNormally);
     });
   });
 

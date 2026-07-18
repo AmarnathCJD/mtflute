@@ -242,6 +242,9 @@ class MtpClient {
     final inflight = _connectInFlight;
     if (inflight != null) return inflight.future;
     final gate = Completer<void>();
+    // Guard against an "unhandled async error" if _doConnect fails and no
+    // concurrent caller ever awaited the gate.
+    gate.future.catchError((_) {});
     _connectInFlight = gate;
     try {
       await _doConnect();
@@ -286,6 +289,8 @@ class MtpClient {
       _saveSession();
       _initialized = false;
     }
+
+    _lastConnectAt = DateTime.now();
 
     if (!_pollLoopRunning) {
       _pollLoopRunning = true;
@@ -359,20 +364,21 @@ class MtpClient {
     'SESSION_EXPIRED',
   };
 
-  /// How many times [invoke] transparently retries after a network blip
-  /// (transport error, reconnect-invalidated pending request, timeout).
-  /// Server-side errors are never retried — only local disconnects.
-  int invokeRetries = 3;
+  /// Time budget for transparently retrying a request across network blips
+  /// (transport drop, reconnect-invalidated pending request, salt refresh).
+  /// Server-side RPC errors are never retried — only local disconnects.
+  Duration invokeRetryBudget = const Duration(minutes: 2);
 
   Future<TlObject> invoke(TlObject request) async {
     if (_closing) throw StateError('Client is closed');
 
+    final deadline = DateTime.now().add(invokeRetryBudget);
     dynamic lastNetworkErr;
-    for (var attempt = 0; attempt <= invokeRetries; attempt++) {
-      if (_reconnectInProgress) {
-        while (_reconnectInProgress && !_closing) {
-          await Future.delayed(const Duration(milliseconds: 50));
-        }
+    var softAttempt = 0;
+
+    while (true) {
+      while (_reconnectInProgress && !_closing) {
+        await Future.delayed(const Duration(milliseconds: 50));
       }
       if (_closing) throw StateError('Client is closed');
 
@@ -380,8 +386,8 @@ class MtpClient {
         await _ensureReady();
       } catch (e) {
         lastNetworkErr = e;
-        if (autoReconnect && !_closing && attempt < invokeRetries) {
-          await Future.delayed(Duration(milliseconds: 100 * (1 << attempt)));
+        if (autoReconnect && !_closing && DateTime.now().isBefore(deadline)) {
+          await _softBackoff(softAttempt++);
           continue;
         }
         rethrow;
@@ -415,6 +421,7 @@ class MtpClient {
         rethrow;
       } on _RetryWithNewSalt catch (e) {
         lastNetworkErr = e;
+        softAttempt = 0;
       } on BadMsgError catch (e) {
         lastNetworkErr = e;
       } on StateError catch (e) {
@@ -425,13 +432,18 @@ class MtpClient {
         lastNetworkErr = e;
       }
 
-      if (attempt < invokeRetries && autoReconnect && !_closing) {
-        await Future.delayed(Duration(milliseconds: 100 * (1 << attempt)));
+      if (autoReconnect && !_closing && DateTime.now().isBefore(deadline)) {
+        await _softBackoff(softAttempt++);
         continue;
       }
       break;
     }
     throw (lastNetworkErr ?? StateError('invoke failed with no error')) as Object;
+  }
+
+  Future<void> _softBackoff(int attempt) async {
+    final ms = (50 * (1 << attempt.clamp(0, 5))).clamp(50, 1600);
+    await Future.delayed(Duration(milliseconds: ms));
   }
 
   Future<void> _migrateTo(int newDc) async {
@@ -603,6 +615,11 @@ class MtpClient {
     _pingTimer = null;
     _diffTimer?.cancel();
     _diffTimer = null;
+    _ackTimer?.cancel();
+    _ackTimer = null;
+    // msg_ids are session-scoped; a reconnect starts a fresh session so any
+    // queued acks reference a session the server no longer tracks.
+    _pendingAcks.clear();
     _updatesRunning = false;
   }
 
@@ -989,15 +1006,20 @@ class MtpClient {
   }
 
   Future<void> _fireAndForget(TlObject obj, {bool contentRelated = false}) async {
+    final encoder = TlEncoder();
+    obj.encode(encoder);
+    await _fireAndForgetRaw(encoder.toBytes(), contentRelated: contentRelated);
+  }
+
+  Future<void> _fireAndForgetRaw(Uint8List payload,
+      {bool contentRelated = false}) async {
     if (_transport == null || !_transport!.isConnected || _authKey == null) {
       return;
     }
-    final encoder = TlEncoder();
-    obj.encode(encoder);
     final msgId = _genMsgId();
     final seqNo = _nextSeqNo(contentRelated: contentRelated);
     final serialized = serializeEncrypted(
-      msg: encoder.toBytes(),
+      msg: payload,
       msgId: msgId,
       seqNo: seqNo,
       authKey: _authKey!,
@@ -1012,6 +1034,41 @@ class MtpClient {
       await _transport!.writeMsg(serialized);
     } catch (_) {} finally {
       next.complete();
+    }
+  }
+
+  final _pendingAcks = <int>{};
+  static const _ackThreshold = 10;
+  static const _maxAcksPerBatch = 8192;
+  Timer? _ackTimer;
+
+  void _queueAck(int msgId, int seqNo) {
+    if ((seqNo & 1) == 0) return;
+    _pendingAcks.add(msgId);
+    if (_pendingAcks.length >= _ackThreshold) {
+      _flushAcks();
+    } else {
+      _ackTimer ??= Timer(const Duration(milliseconds: 300), () {
+        _ackTimer = null;
+        _flushAcks();
+      });
+    }
+  }
+
+  void _flushAcks() {
+    _ackTimer?.cancel();
+    _ackTimer = null;
+    if (_pendingAcks.isEmpty) return;
+    if (_transport == null || !_transport!.isConnected || _authKey == null) {
+      return;
+    }
+    final ids = _pendingAcks.toList();
+    _pendingAcks.clear();
+    for (var start = 0; start < ids.length; start += _maxAcksPerBatch) {
+      final end = (start + _maxAcksPerBatch < ids.length)
+          ? start + _maxAcksPerBatch
+          : ids.length;
+      unawaited(_fireAndForgetRaw(encodeMsgsAck(ids.sublist(start, end))));
     }
   }
 
@@ -1100,6 +1157,9 @@ class MtpClient {
   bool _reconnectInProgress = false;
   bool _migrateInProgress = false;
 
+  DateTime? _lastConnectAt;
+  int _flapCount = 0;
+
   Future<void> _pollResponses() async {
     try {
       while (!_closing && !_migrateInProgress) {
@@ -1116,6 +1176,13 @@ class MtpClient {
         } catch (e) {
           if (_closing || _migrateInProgress) break;
           if (!autoReconnect) break;
+          final up = _lastConnectAt;
+          if (up != null &&
+              DateTime.now().difference(up) < const Duration(seconds: 10)) {
+            _flapCount++;
+          } else {
+            _flapCount = 0;
+          }
           logger.warn('read error: $e — reconnecting');
           final ok = await _reconnect();
           if (!ok) break;
@@ -1166,18 +1233,15 @@ class MtpClient {
       ) {
         if (_closing || _migrateInProgress) return false;
 
-        // Exponential backoff, capped at maxReconnectDelay. Attempt 1 has no
-        // wait so we recover instantly from a fluke disconnect; from attempt 2
-        // onwards it's 1s, 2s, 4s, 8s, 16s, then capped.
-        if (attempt > 1) {
-          final base = 1 << (attempt - 2).clamp(0, 6); // 1,2,4,8,16,32,64
+        final step = (attempt - 1) + _flapCount;
+        if (step > 0) {
+          final base = 1 << (step - 1).clamp(0, 6); // 1,2,4,8,16,32,64
           final capped = base.clamp(1, maxReconnectDelay.inSeconds);
           final jitterMs =
               (randomBytes(2).buffer.asByteData().getUint16(0, Endian.little) %
                   500);
-          final delay =
-              Duration(seconds: capped, milliseconds: jitterMs);
-          logger.info('reconnect attempt $attempt (wait $delay)');
+          final delay = Duration(seconds: capped, milliseconds: jitterMs);
+          logger.info('reconnect attempt $attempt (flap=$_flapCount, wait $delay)');
           await Future.delayed(delay);
         }
         if (_closing || _migrateInProgress) return false;
@@ -1201,6 +1265,7 @@ class MtpClient {
           // concurrent _ensureReady() caller can't spin up a second socket.
           await connect();
           logger.info('reconnected on attempt $attempt');
+          _lastConnectAt = DateTime.now();
           if (_authKey != null) {
             _startBackgroundTimers();
           }
@@ -1227,22 +1292,45 @@ class MtpClient {
     final d = TlDecoder(msg.msg);
     final crc = d.readCrc();
 
+    if (crc == crcMessageContainer) {
+      final count = d.readUint32();
+      for (var i = 0; i < count; i++) {
+        final innerMsgId = d.readInt64();
+        final innerSeqNo = d.readInt32();
+        final innerLen = d.readUint32();
+        _queueAck(innerMsgId, innerSeqNo);
+        _processInnerMessage(innerMsgId, d.readRawBytes(innerLen));
+      }
+      return;
+    }
+
+    _queueAck(msg.msgId, msg.seqNo);
+
     if (crc == crcRpcResult) {
       _dispatchResponse(d.readInt64(), d.readRestOfMessage());
       return;
     }
 
-    if (crc == crcMessageContainer) {
-      final count = d.readUint32();
-      for (var i = 0; i < count; i++) {
-        d.readInt64();
-        d.readInt32();
-        final innerLen = d.readUint32();
-        _processInnerMessage(d.readRawBytes(innerLen));
-      }
+    if (!_handleServiceMessage(msg.msgId, crc, d)) {
+      _tryDispatchAsUpdate(crc, msg.msg);
+    }
+  }
+
+  void _processInnerMessage(int outerMsgId, Uint8List data) {
+    final d = TlDecoder(data);
+    final crc = d.readCrc();
+
+    if (crc == crcRpcResult) {
+      _dispatchResponse(d.readInt64(), d.readRestOfMessage());
       return;
     }
 
+    if (_handleServiceMessage(outerMsgId, crc, d)) return;
+
+    _tryDispatchAsUpdate(crc, data);
+  }
+
+  bool _handleServiceMessage(int outerMsgId, int crc, TlDecoder d) {
     switch (crc) {
       case crcBadServerSalt:
         final badMsgId = d.readInt64();
@@ -1254,24 +1342,28 @@ class MtpClient {
         if (pending != null && !pending.isCompleted) {
           pending.completeError(_RetryWithNewSalt());
         }
+        return true;
 
       case crcNewSessionCreated:
         d.readInt64();
         d.readInt64();
         _serverSalt = d.readInt64();
         _saveSession();
+        return true;
 
       case crcBadMsgNotification:
         final badMsgId = d.readInt64();
         d.readInt32();
         final errorCode = d.readInt32();
         if (errorCode == 16 || errorCode == 17) {
-          _timeOffset = (msg.msgId >> 32) -
+          _timeOffset = (outerMsgId >> 32) -
               (DateTime.now().millisecondsSinceEpoch ~/ 1000);
+          _lastMsgId = 0;
         }
         if (errorCode == 32 || errorCode == 33) {
           _seqNo = 0;
-          _sessionId = randomBytes(8).buffer.asByteData().getInt64(0, Endian.little);
+          _sessionId =
+              randomBytes(8).buffer.asByteData().getInt64(0, Endian.little);
           _lastMsgId = 0;
           final drained = List.of(_pendingRequests.entries);
           _pendingRequests.clear();
@@ -1280,36 +1372,24 @@ class MtpClient {
               e.value.completeError(_RetryWithNewSalt());
             }
           }
-          return;
+          return true;
         }
         final pending = _pendingRequests.remove(badMsgId);
         if (pending != null && !pending.isCompleted) {
           if (errorCode == 16 || errorCode == 17 || errorCode == 48) {
             pending.completeError(_RetryWithNewSalt());
           } else {
-            pending.completeError(
-              BadMsgError(code: errorCode, msgId: badMsgId));
+            pending.completeError(BadMsgError(code: errorCode, msgId: badMsgId));
           }
         }
+        return true;
 
       case crcMsgsAck || crcPong:
-        break;
+        return true;
 
       default:
-        _tryDispatchAsUpdate(crc, msg.msg);
+        return false;
     }
-  }
-
-  void _processInnerMessage(Uint8List data) {
-    final d = TlDecoder(data);
-    final crc = d.readCrc();
-
-    if (crc == crcRpcResult) {
-      _dispatchResponse(d.readInt64(), d.readRestOfMessage());
-      return;
-    }
-
-    _tryDispatchAsUpdate(crc, data);
   }
 
   bool _debugUpdates = false;
@@ -1334,7 +1414,22 @@ class MtpClient {
     return true;
   }
 
+  static const _maxGunzipBytes = 32 * 1024 * 1024;
+
   void _tryDispatchAsUpdate(int crc, Uint8List data) {
+    if (crc == crcGzipPacked) {
+      try {
+        final d = TlDecoder(data);
+        d.readCrc();
+        final unpacked = Uint8List.fromList(gzip.decode(d.readBytes()));
+        if (unpacked.length > _maxGunzipBytes) return;
+        final inner = TlDecoder(unpacked);
+        _tryDispatchAsUpdate(inner.readCrc(), unpacked);
+      } catch (e) {
+        logger.trace('gunzip failed: $e');
+      }
+      return;
+    }
     logger.trace('incoming crc=0x${crc.toRadixString(16)} len=${data.length}');
     if (_updateHandlers.isEmpty &&
         _messageHandlers.isEmpty &&
