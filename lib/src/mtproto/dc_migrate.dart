@@ -11,6 +11,9 @@ extension DcMigration on MtpClient {
       timeout: timeout,
       sessionFile: null,
     );
+    sub.workerMode = true;
+    sub.logger.level = logger.level;
+    sub.logger.prefix = '${logger.prefix}:sub';
 
     try {
       if (targetDcId == dcId) {

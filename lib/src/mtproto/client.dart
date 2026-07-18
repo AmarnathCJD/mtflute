@@ -100,6 +100,11 @@ class MtpClient {
   final Map<int, List<MtpClient>> _senderPool = {};
   final Map<int, DateTime> _senderLastUsed = {};
 
+  /// When true, this client is a background worker (spawned by exportToDc for
+  /// parallel file transfer) and skips the updates loop, ping timer, and
+  /// getDifference polling — it exists only to service file RPCs.
+  bool workerMode = false;
+
   MtpClient({
     required this.appId,
     required this.appHash,
@@ -190,6 +195,7 @@ class MtpClient {
   void copyAuthFrom(MtpClient other) {
     _authKey = other._authKey;
     _serverSalt = other._serverSalt;
+    _timeOffset = other._timeOffset;
   }
 
   List<MtpClient> getSendersFor(int dcId) {
@@ -337,7 +343,7 @@ class MtpClient {
         ),
       );
       _initialized = true;
-      if (_authKey != null && _pingTimer == null) {
+      if (_authKey != null && _pingTimer == null && !workerMode) {
         unawaited(_startUpdatesLoop());
       }
     }

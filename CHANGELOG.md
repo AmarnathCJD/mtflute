@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.8
+
+- Fixed `MSGID_DECREASE_RETRY` when a caller mixes parallel worker RPCs (via `threads: >1` on `uploadFile` / `downloadStream` / `downloadRange`) with main-connection RPCs. `copyAuthFrom` now copies the parent's `_timeOffset` so same-DC sub-clients agree with main on encoded msg-id timestamps.
+- Exported sub-clients created by `exportToDc` are marked `workerMode = true` and skip the updates loop / ping timer, avoiding needless `updates.getState` traffic on file-transfer workers.
+- Raised the internal `_maxWorkers` cap from 3 to 16 so explicit `threads: N` requests up to 16 are honored.
+- Verified end-to-end at `threads` = 1, 4, 8, 12: no `MSGID_DECREASE_RETRY`, byte-exact roundtrip, main connection intact for subsequent RPCs.
+
 ## 0.2.7
 
 - Logger now prefixes each line with a `HH:MM:SS.mmm` timestamp by default. Disable via `Logger(showTimestamp: false)`.

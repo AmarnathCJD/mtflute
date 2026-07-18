@@ -21,7 +21,7 @@ typedef FileReferenceRefresher =
 const _defaultChunkSize = 512 * 1024;
 const _maxDownloadChunk = 1024 * 1024;
 const _bigFileThreshold = 10 * 1024 * 1024;
-const _maxWorkers = 3;
+const _maxWorkers = 16;
 const _maxRetriesPerPart = 20;
 const _pipelinePerWorker = 4;
 
