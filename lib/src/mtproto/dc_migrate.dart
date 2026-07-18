@@ -10,6 +10,7 @@ extension DcMigration on MtpClient {
       ipv6: ipv6,
       timeout: timeout,
       sessionFile: null,
+      proxy: proxy,
     );
     sub.workerMode = true;
     sub.logger.level = logger.level;
@@ -18,6 +19,13 @@ extension DcMigration on MtpClient {
     try {
       if (targetDcId == dcId) {
         sub.copyAuthFrom(this);
+        await sub.connect();
+        return sub;
+      }
+
+      final cachedKey = persistedKeyFor(targetDcId);
+      if (cachedKey != null) {
+        sub.seedAuthKey(cachedKey);
         await sub.connect();
         return sub;
       }
@@ -33,6 +41,7 @@ extension DcMigration on MtpClient {
         AuthImportAuthorizationRequest(id: eAuth.id, bytes: eAuth.bytes),
       );
 
+      recordDcKey(targetDcId, sub.authKeyBytes);
       return sub;
     } catch (e) {
       try {

@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.0
+
+Implements the remaining missing MTProto features from the deep feature audit.
+
+### Auth
+- **QR-code login** — `client.qrLogin()` (`auth.exportLoginToken` / `importLoginToken`), returns a `tg://login?token=…` URL and completes when scanned.
+- **2FA password setting/changing** — `client.edit2FA(currentPassword, newPassword, hint, email)` with a new `computeDigest` SRP primitive; pass an empty `newPassword` to remove the password.
+- **Multiple simultaneous DC connections with per-DC persisted auth keys** — `SessionData` now stores a `dc_keys` map (file + gogram-compatible string session). `exportToDc` reuses a cached per-DC key instead of re-running export/import each time.
+- **AUTH_KEY_DUPLICATED** — regenerates the auth key on that DC and retries instead of reusing a poisoned key.
+- `logOut()` also clears in-memory auth and the persisted session.
+
+### Updates
+- **Common-box `pts` dedup + gap detection** — already-applied updates are skipped and a forward gap triggers `getDifference`.
+- **`seq` gap detection** for `updates` / `updatesCombined` envelopes.
+
+### Transport
+- **Proxy support** — `Proxy.socks5` / `Proxy.socks4` / `Proxy.http` (with auth); pass `proxy:` to `MtpClient`.
+
+### Files
+- **CDN download** — `upload.getCdnFile` with AES-256-CTR decryption and `reuploadCdnFile` handling; CDN-served files no longer throw.
+
+### Secret chats (E2E)
+- `startSecretChat` / `acceptSecretChat` / `completeSecretChat` / `discardSecretChat` — Diffie-Hellman key exchange, key-fingerprint verification, MTProto-2.0 E2E encryption, in/out seq tracking.
+- `sendSecretMessage` / `decryptSecretMessage` for text messages; `onSecretChatUpdate` / `onEncryptedMessage` handlers.
+
+### Misc
+- Default `appVersion` now tracks the library version (`libVersion`).
+- TL strings and SRP passwords are UTF-8.
+
 ## 0.3.0
 
 New MTProto features found by a deep missing-feature audit against the official docs.

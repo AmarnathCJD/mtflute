@@ -17,6 +17,7 @@ class SessionData {
   int appId;
   int serverSalt;
   Map<String, dynamic>? peers;
+  Map<int, Uint8List> dcKeys;
 
   SessionData({
     this.authKey,
@@ -26,7 +27,24 @@ class SessionData {
     this.appId = 0,
     this.serverSalt = 0,
     this.peers,
-  });
+    Map<int, Uint8List>? dcKeys,
+  }) : dcKeys = dcKeys ?? {};
+
+  static Map<int, Uint8List> _decodeDcKeys(dynamic raw) {
+    final out = <int, Uint8List>{};
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        final id = int.tryParse('$k');
+        if (id != null && v is String) out[id] = base64.decode(v);
+      });
+    }
+    return out;
+  }
+
+  Map<String, String>? _encodeDcKeys() {
+    if (dcKeys.isEmpty) return null;
+    return dcKeys.map((k, v) => MapEntry('$k', base64.encode(v)));
+  }
 
   Map<String, dynamic> _publicJson() {
     final m = <String, dynamic>{};
@@ -35,6 +53,8 @@ class SessionData {
     m['dc_id'] = dcId;
     if (ipAddr.isNotEmpty) m['ip_addr'] = ipAddr;
     if (appId != 0) m['app_id'] = appId;
+    final dk = _encodeDcKeys();
+    if (dk != null) m['dc_keys'] = dk;
     return m;
   }
 
@@ -54,6 +74,7 @@ class SessionData {
         dcId: (map['dc_id'] as int?) ?? 4,
         ipAddr: (map['ip_addr'] as String?) ?? '',
         appId: (map['app_id'] as int?) ?? 0,
+        dcKeys: _decodeDcKeys(map['dc_keys']),
       );
     }
     if (encoded.startsWith(_sessionPrefixLegacy)) {
@@ -94,6 +115,7 @@ class SessionData {
       'app_id': appId,
       'dc_id': dcId,
       if (peers != null) 'peers': peers,
+      if (dcKeys.isNotEmpty) 'dc_keys': _encodeDcKeys(),
     });
     final bytes = utf8.encode(j);
     if (aesKey.isNotEmpty) {
@@ -130,6 +152,7 @@ class SessionData {
       appId: map['app_id'] as int? ?? 0,
       dcId: map['dc_id'] as int? ?? 4,
       peers: map['peers'] as Map<String, dynamic>?,
+      dcKeys: _decodeDcKeys(map['dc_keys']),
     );
   }
 

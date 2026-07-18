@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -7,6 +8,7 @@ import '../crypto/srp.dart';
 import '../transport/tcp_transport.dart';
 import '../transport/transport_mode.dart';
 import '../transport/dc_options.dart';
+import '../transport/proxy.dart';
 import '../tl/tl_encoder.dart';
 import '../tl/tl_decoder.dart';
 import '../tg/tg.dart';
@@ -23,6 +25,9 @@ import 'events.dart';
 /// Telegram API layer this client targets. Updated when the TL schema is regenerated.
 const apiLayer = 228;
 
+/// mtflute library version. Sent as the default `app_version` in initConnection.
+const libVersion = '0.4.0';
+
 /// Async prompt for credentials (OTP, 2FA password). Used by [MtpClient.login].
 typedef InputCallback = Future<String> Function(String prompt);
 
@@ -33,6 +38,12 @@ typedef MtpRpcError = TgError;
 typedef BoolResult = BoolValue;
 
 class _RetryWithNewSalt implements Exception {}
+
+class QrLoginResult {
+  final String url;
+  final AuthAuthorization authorization;
+  QrLoginResult({required this.url, required this.authorization});
+}
 
 /// Pure-Dart Telegram MTProto client.
 ///
@@ -81,6 +92,7 @@ class MtpClient {
 
   TcpTransport? _transport;
   Uint8List? _authKey;
+  final Map<int, Uint8List> _persistedKeys = {};
   int _serverSalt = 0;
   int _sessionId = 0;
   int _seqNo = 0;
@@ -105,6 +117,8 @@ class MtpClient {
   /// getDifference polling — it exists only to service file RPCs.
   bool workerMode = false;
 
+  final Proxy? proxy;
+
   MtpClient({
     required this.appId,
     required this.appHash,
@@ -112,11 +126,12 @@ class MtpClient {
     this.ipv6 = false,
     this.deviceModel = 'MTFlute',
     this.systemVersion = '1.0',
-    this.appVersion = '0.1.0',
+    this.appVersion = libVersion,
     this.langCode = 'en',
     this.timeout = const Duration(seconds: 15),
     this.sessionFile,
     this.stringSession,
+    this.proxy,
   }) {
     _sessionId = randomBytes(8).buffer.asByteData().getInt64(0, Endian.little);
     _loadSession();
@@ -128,6 +143,7 @@ class MtpClient {
       _authKey = s.authKey;
       _serverSalt = s.serverSalt;
       if (s.dcId > 0) dcId = s.dcId;
+      _persistedKeys.addAll(s.dcKeys);
     } else if (sessionFile != null) {
       try {
         final s = SessionData.loadFromFile(sessionFile!);
@@ -135,8 +151,10 @@ class MtpClient {
         _serverSalt = s.serverSalt;
         if (s.dcId > 0) dcId = s.dcId;
         if (s.peers != null) cache.loadJson(s.peers!);
+        _persistedKeys.addAll(s.dcKeys);
       } catch (_) {}
     }
+    if (_authKey != null) _persistedKeys[dcId] = _authKey!;
     cache.onDirty = _markSessionDirty;
   }
 
@@ -160,6 +178,7 @@ class MtpClient {
 
   Future<void> _flushSession() async {
     if (_authKey == null || sessionFile == null) return;
+    _persistedKeys[dcId] = _authKey!;
     final data = SessionData(
       authKey: _authKey,
       authKeyHash: authKeyHash(_authKey!),
@@ -168,6 +187,7 @@ class MtpClient {
       appId: appId,
       serverSalt: _serverSalt,
       peers: cache.toJson(),
+      dcKeys: Map.of(_persistedKeys),
     );
     try {
       await data.saveToFileAsync(sessionFile!);
@@ -182,6 +202,7 @@ class MtpClient {
   }
 
   String exportSession() {
+    if (_authKey != null) _persistedKeys[dcId] = _authKey!;
     return SessionData(
       authKey: _authKey,
       authKeyHash: _authKey != null ? authKeyHash(_authKey!) : null,
@@ -189,6 +210,7 @@ class MtpClient {
       ipAddr: getDcAddress(dcId, ipv6: ipv6),
       appId: appId,
       serverSalt: _serverSalt,
+      dcKeys: Map.of(_persistedKeys),
     ).encodeString();
   }
 
@@ -197,6 +219,22 @@ class MtpClient {
     _serverSalt = other._serverSalt;
     _timeOffset = other._timeOffset;
   }
+
+  Uint8List? persistedKeyFor(int dc) => _persistedKeys[dc];
+
+  void seedAuthKey(Uint8List key) {
+    _authKey = key;
+    _initialized = false;
+  }
+
+  void recordDcKey(int dc, Uint8List? key) {
+    if (key != null) {
+      _persistedKeys[dc] = key;
+      _saveSession();
+    }
+  }
+
+  Uint8List? get authKeyBytes => _authKey;
 
   List<MtpClient> getSendersFor(int dcId) {
     final list = _senderPool[dcId];
@@ -274,6 +312,7 @@ class MtpClient {
       port: port,
       modeVariant: TransportModeVariant.abridged,
       timeout: timeout,
+      proxy: proxy,
     );
     await _transport!.connect();
 
@@ -354,6 +393,24 @@ class MtpClient {
     }
   }
 
+  Future<void> _regenerateAuthKey() async {
+    logger.warn('AUTH_KEY_DUPLICATED — regenerating auth key on DC$dcId');
+    _stopBackgroundTimers();
+    try {
+      await _transport?.close();
+    } catch (_) {}
+    _transport = null;
+    _authKey = null;
+    _serverSalt = 0;
+    _initialized = false;
+    _seqNo = 0;
+    _lastMsgId = 0;
+    _sessionId = randomBytes(8).buffer.asByteData().getInt64(0, Endian.little);
+    _persistedKeys.remove(dcId);
+    await connect();
+    _saveSession();
+  }
+
   int _migrateDepth = 0;
 
   static final _terminalAuthErrors = <String>{
@@ -413,6 +470,10 @@ class MtpClient {
           } finally {
             _migrateDepth--;
           }
+        }
+        if (e.matches('AUTH_KEY_DUPLICATED')) {
+          await _regenerateAuthKey();
+          continue;
         }
         if (_authorizedOnce && _terminalAuthErrors.any(e.matches)) {
           autoReconnect = false;
@@ -533,6 +594,7 @@ class MtpClient {
   int _pts = 0;
   int _qts = 0;
   int _date = 0;
+  int _seq = 0;
   final Map<int, int> _channelPts = {};
   final Set<int> _channelDiffInFlight = {};
   bool _updatesRunning = false;
@@ -551,6 +613,7 @@ class MtpClient {
           _pts = state.pts;
           _qts = state.qts;
           _date = state.date;
+          _seq = state.seq;
           logger.debug('initial state pts=$_pts qts=$_qts date=$_date');
           break;
         }
@@ -584,36 +647,58 @@ class MtpClient {
     });
 
     _diffTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (_timersPaused || _closing || !isConnected || _reconnectInProgress ||
-          _migrateInProgress) {
-        return;
-      }
-      if (_pts == 0 || _date == 0) return;
-      if (_diffInFlight) return;
-      if (_diffBackoffUntil != null &&
-          DateTime.now().isBefore(_diffBackoffUntil!)) {
-        return;
-      }
-      _diffInFlight = true;
-      try {
-        for (var i = 0; i < 20; i++) {
-          if (_pts == 0 || _date == 0) break;
-          final diff = await invoke(
-            UpdatesGetDifferenceRequest(pts: _pts, date: _date, qts: _qts),
-          );
-          final more = _applyDifference(diff);
-          if (!more) break;
-        }
-        _diffBackoffUntil = null;
-      } on TgError catch (e) {
-        if (e.isFlood && e.waitDuration != null) {
-          _diffBackoffUntil = DateTime.now().add(e.waitDuration!);
-        }
-      } catch (_) {
-      } finally {
-        _diffInFlight = false;
-      }
+      await _runGetDifference();
     });
+  }
+
+  Future<void> _runGetDifference() async {
+    if (_timersPaused || _closing || !isConnected || _reconnectInProgress ||
+        _migrateInProgress) {
+      return;
+    }
+    if (_pts == 0 || _date == 0) return;
+    if (_diffInFlight) return;
+    if (_diffBackoffUntil != null &&
+        DateTime.now().isBefore(_diffBackoffUntil!)) {
+      return;
+    }
+    _diffInFlight = true;
+    try {
+      for (var i = 0; i < 20; i++) {
+        if (_pts == 0 || _date == 0) break;
+        final diff = await invoke(
+          UpdatesGetDifferenceRequest(pts: _pts, date: _date, qts: _qts),
+        );
+        final more = _applyDifference(diff);
+        if (!more) break;
+      }
+      _diffBackoffUntil = null;
+    } on TgError catch (e) {
+      if (e.isFlood && e.waitDuration != null) {
+        _diffBackoffUntil = DateTime.now().add(e.waitDuration!);
+      }
+    } catch (_) {
+    } finally {
+      _diffInFlight = false;
+    }
+  }
+
+  bool _manageSeq(int seqStart, int seqEnd, int date) {
+    if (seqStart == 0) {
+      if (date > _date) _date = date;
+      return true;
+    }
+    final localSeq = _seq;
+    if (seqStart == localSeq + 1) {
+      _seq = seqEnd;
+      if (date > _date) _date = date;
+      return true;
+    }
+    if (seqStart <= localSeq) {
+      return false;
+    }
+    unawaited(_runGetDifference());
+    return false;
   }
 
   void _stopBackgroundTimers() {
@@ -630,9 +715,16 @@ class MtpClient {
     _updatesRunning = false;
   }
 
-  /// Applies one getDifference result. Returns true when the caller should
-  /// call getDifference again immediately (a slice, or a too-long reset).
   bool _applyDifference(TlObject diff) {
+    _inDifference = true;
+    try {
+      return _applyDifferenceImpl(diff);
+    } finally {
+      _inDifference = false;
+    }
+  }
+
+  bool _applyDifferenceImpl(TlObject diff) {
     if (diff is UpdatesDifferenceEmpty) {
       _date = diff.date;
       return false;
@@ -650,6 +742,7 @@ class MtpClient {
         _pts = s.pts;
         _qts = s.qts;
         _date = s.date;
+        _seq = s.seq;
       }
       return false;
     } else if (diff is UpdatesDifferenceSlice) {
@@ -801,6 +894,149 @@ class MtpClient {
     );
   }
 
+  Future<QrLoginResult> qrLogin({
+    List<int> exceptIds = const [],
+    Duration timeout = const Duration(minutes: 2),
+  }) async {
+    await _ensureReady();
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final r = await invoke(
+        AuthExportLoginTokenRequest(
+          apiId: appId,
+          apiHash: appHash,
+          exceptIds: exceptIds,
+        ),
+      );
+      if (r is AuthLoginTokenObj) {
+        final url = 'tg://login?token=${base64Url.encode(r.token)}';
+        final accepted = await _awaitQrScan(r.token, deadline);
+        if (accepted != null) {
+          _authorizedOnce = true;
+          autoReconnect = true;
+          _saveSession();
+          await _startUpdatesLoop();
+          return QrLoginResult(url: url, authorization: accepted);
+        }
+        continue;
+      } else if (r is AuthLoginTokenMigrateTo) {
+        await _migrateTo(r.dcId);
+        final imported =
+            await invoke(AuthImportLoginTokenRequest(token: r.token));
+        if (imported is AuthLoginTokenSuccess) {
+          _authorizedOnce = true;
+          autoReconnect = true;
+          _saveSession();
+          await _startUpdatesLoop();
+          return QrLoginResult(
+            url: 'tg://login?token=${base64Url.encode(r.token)}',
+            authorization: imported.authorization,
+          );
+        }
+      } else if (r is AuthLoginTokenSuccess) {
+        _authorizedOnce = true;
+        autoReconnect = true;
+        _saveSession();
+        await _startUpdatesLoop();
+        return QrLoginResult(url: '', authorization: r.authorization);
+      }
+    }
+    throw TimeoutException('QR login timed out', timeout);
+  }
+
+  Future<AuthAuthorization?> _awaitQrScan(
+      Uint8List token, DateTime deadline) async {
+    final c = Completer<void>();
+    void onTok(TlObject u) {
+      if (u is UpdateLoginToken && !c.isCompleted) c.complete();
+    }
+    onUpdate(onTok);
+    try {
+      final wait = deadline.difference(DateTime.now());
+      if (wait <= Duration.zero) return null;
+      try {
+        await c.future.timeout(wait);
+      } on TimeoutException {
+        return null;
+      }
+      final r = await invoke(
+        AuthExportLoginTokenRequest(
+          apiId: appId,
+          apiHash: appHash,
+          exceptIds: const [],
+        ),
+      );
+      if (r is AuthLoginTokenSuccess) return r.authorization;
+      if (r is AuthLoginTokenMigrateTo) {
+        await _migrateTo(r.dcId);
+        final imported =
+            await invoke(AuthImportLoginTokenRequest(token: r.token));
+        if (imported is AuthLoginTokenSuccess) return imported.authorization;
+      }
+      return null;
+    } finally {
+      removeUpdateHandler(onTok);
+    }
+  }
+
+  Future<bool> edit2FA({
+    String? currentPassword,
+    String? newPassword,
+    String hint = '',
+    String? email,
+  }) async {
+    final pwd =
+        (await invoke(AccountGetPasswordRequest())) as AccountPasswordObj;
+
+    final InputCheckPasswordSRP current;
+    if (pwd.hasPassword && currentPassword != null && currentPassword.isNotEmpty) {
+      current = _computeSrpPassword(currentPassword, pwd);
+    } else {
+      current = InputCheckPasswordEmpty();
+    }
+
+    final newAlgo = pwd.newAlgo;
+    if (newAlgo
+        is! PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) {
+      throw StateError('Unsupported new password algorithm: ${newAlgo.runtimeType}');
+    }
+
+    PasswordKdfAlgo? settingAlgo;
+    Uint8List? newHash;
+    if (newPassword != null && newPassword.isNotEmpty) {
+      final digest = computeDigest(
+        newPassword: newPassword,
+        algoSalt1: newAlgo.salt1,
+        salt2: newAlgo.salt2,
+        g: newAlgo.g,
+        p: newAlgo.p,
+      );
+      settingAlgo =
+          PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow(
+        salt1: digest.salt1,
+        salt2: newAlgo.salt2,
+        g: newAlgo.g,
+        p: newAlgo.p,
+      );
+      newHash = digest.newPasswordHash;
+    } else {
+      newHash = Uint8List(0);
+    }
+
+    final result = await invoke(
+      AccountUpdatePasswordSettingsRequest(
+        password: current,
+        newSettings: AccountPasswordInputSettingsObj(
+          newAlgo: settingAlgo,
+          newPasswordHash: newHash,
+          hint: settingAlgo != null ? hint : null,
+          email: email,
+        ),
+      ),
+    );
+    return result is BoolValue ? result.value : true;
+  }
+
   Future<bool> isAuthorized() async {
     try {
       final s = await invoke(UpdatesGetStateRequest());
@@ -903,6 +1139,14 @@ class MtpClient {
   final _messageHandlers = <void Function(NewMessage msg)>[];
   final _callbackQueryHandlers = <void Function(CallbackQuery query)>[];
   final _inlineQueryHandlers = <void Function(InlineQuery query)>[];
+  final encryptionUpdateHandlers = <void Function(UpdateEncryption u)>[];
+  final newEncryptedMessageHandlers =
+      <void Function(UpdateNewEncryptedMessage u)>[];
+
+  void onSecretChatUpdate(void Function(UpdateEncryption u) h) =>
+      encryptionUpdateHandlers.add(h);
+  void onEncryptedMessage(void Function(UpdateNewEncryptedMessage u) h) =>
+      newEncryptedMessageHandlers.add(h);
 
   void onMessage(void Function(NewMessage msg) handler) {
     _messageHandlers.add(handler);
@@ -947,13 +1191,57 @@ class MtpClient {
     return null;
   }
 
+  (int pts, int ptsCount)? _commonBoxPts(TlObject u) {
+    if (u is UpdateNewMessage) return (u.pts, u.ptsCount);
+    if (u is UpdateDeleteMessages) return (u.pts, u.ptsCount);
+    if (u is UpdateEditMessage) return (u.pts, u.ptsCount);
+    if (u is UpdateReadHistoryInbox) return (u.pts, u.ptsCount);
+    if (u is UpdateReadHistoryOutbox) return (u.pts, u.ptsCount);
+    if (u is UpdateWebPage) return (u.pts, u.ptsCount);
+    if (u is UpdatePinnedMessages) return (u.pts, u.ptsCount);
+    return null;
+  }
+
+  bool _commonBoxOk(TlObject update) {
+    final box = _commonBoxPts(update);
+    if (box == null) return true;
+    final (pts, ptsCount) = box;
+    if (_pts == 0) return true;
+    final expected = pts - ptsCount;
+    if (expected == _pts) {
+      _pts = pts;
+      return true;
+    }
+    if (pts <= _pts) return false;
+    unawaited(_runGetDifference());
+    return false;
+  }
+
+  bool _inDifference = false;
+
   void _dispatchUpdate(TlObject update) {
+    if (!_inDifference && !_commonBoxOk(update)) return;
+
     for (final handler in _updateHandlers) {
       handler(update);
     }
 
     if (update is UpdateChannelTooLong) {
       unawaited(_fetchChannelDifference(update.channelId, startPts: update.pts));
+      return;
+    }
+
+    if (update is UpdateEncryption) {
+      for (final h in encryptionUpdateHandlers) {
+        h(update);
+      }
+      return;
+    }
+
+    if (update is UpdateNewEncryptedMessage) {
+      for (final h in newEncryptedMessageHandlers) {
+        h(update);
+      }
       return;
     }
 
@@ -984,12 +1272,14 @@ class MtpClient {
         h(iq);
       }
     } else if (update is UpdatesObj) {
+      if (!_manageSeq(update.seq, update.seq, update.date)) return;
       cache.updateFromUsers(update.users);
       cache.updateFromChats(update.chats);
       for (final u in update.updates) {
         _dispatchUpdate(u);
       }
     } else if (update is UpdatesCombined) {
+      if (!_manageSeq(update.seqStart, update.seq, update.date)) return;
       cache.updateFromUsers(update.users);
       cache.updateFromChats(update.chats);
       for (final u in update.updates) {

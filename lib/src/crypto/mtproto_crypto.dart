@@ -327,3 +327,9 @@ Uint8List aesCbcDecrypt(Uint8List data, Uint8List key) {
   }
   return Uint8List.fromList(decrypted.sublist(0, decrypted.length - padding));
 }
+
+Uint8List aesCtrDecrypt(Uint8List data, Uint8List key, Uint8List iv) {
+  final cipher = CTRStreamCipher(AESEngine())
+    ..init(false, ParametersWithIV(KeyParameter(key), iv));
+  return cipher.process(data);
+}

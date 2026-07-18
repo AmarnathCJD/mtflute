@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:pointycastle/export.dart';
@@ -28,7 +29,7 @@ SrpAnswer? computeSrpCheck({
 
   final u = bytesToBigInt(_sha256Multi([ga, gb]));
   final x = bytesToBigInt(
-    _passwordHash2(Uint8List.fromList(password.codeUnits), salt1, salt2),
+    _passwordHash2(Uint8List.fromList(utf8.encode(password)), salt1, salt2),
   );
   final v = gBig.modPow(x, pBig);
   final k = bytesToBigInt(_sha256Multi([p, gBytes]));
@@ -93,4 +94,30 @@ Uint8List _xorBytes(Uint8List a, Uint8List b) {
     result[i] = a[i] ^ b[i];
   }
   return result;
+}
+
+class NewPasswordDigest {
+  final Uint8List salt1;
+  final Uint8List newPasswordHash;
+  NewPasswordDigest({required this.salt1, required this.newPasswordHash});
+}
+
+NewPasswordDigest computeDigest({
+  required String newPassword,
+  required Uint8List algoSalt1,
+  required Uint8List salt2,
+  required int g,
+  required Uint8List p,
+}) {
+  final salt1 = Uint8List(algoSalt1.length + 32);
+  salt1.setRange(0, algoSalt1.length, algoSalt1);
+  salt1.setRange(algoSalt1.length, salt1.length, randomBytes(32));
+
+  final pBig = bytesToBigInt(p);
+  final gBig = BigInt.from(g);
+  final x = bytesToBigInt(
+    _passwordHash2(Uint8List.fromList(utf8.encode(newPassword)), salt1, salt2),
+  );
+  final v = _pad256(bigIntToUnsignedBytes(gBig.modPow(x, pBig)));
+  return NewPasswordDigest(salt1: salt1, newPasswordHash: v);
 }

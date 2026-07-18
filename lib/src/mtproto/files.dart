@@ -335,9 +335,7 @@ extension FileOperations on MtpClient {
           );
           if (result is UploadFileObj) return result.bytes;
           if (result is UploadFileCdnRedirect) {
-            throw UnimplementedError(
-              'CDN downloads are not yet supported (fileToken=${result.fileToken.length} bytes)',
-            );
+            return _fetchCdnChunk(result, offset, chunkSize);
           }
           throw StateError('Unexpected download response: ${result.runtimeType}');
         } on TgError catch (e) {
@@ -476,6 +474,9 @@ extension FileOperations on MtpClient {
             ),
           );
           if (result is UploadFileObj) return result.bytes;
+          if (result is UploadFileCdnRedirect) {
+            return _fetchCdnChunk(result, offset, chunkSize);
+          }
           throw StateError('unexpected: ${result.runtimeType}');
         } on TgError catch (e) {
           if (e.matches('FILE_REFERENCE_EXPIRED') && refreshLocation != null) {
@@ -626,6 +627,71 @@ extension FileOperations on MtpClient {
     }
 
     return sendMedia(peer: peer, media: media, message: caption ?? '');
+  }
+
+  Future<Uint8List> _fetchCdnChunk(
+    UploadFileCdnRedirect redirect,
+    int offset,
+    int chunkSize,
+  ) async {
+    final cdn = await _buildPool(this, redirect.dcId, 1);
+    try {
+      var attempts = 0;
+      while (true) {
+        final worker = await cdn.acquire();
+        try {
+          final r = await worker.invoke(
+            UploadGetCdnFileRequest(
+              fileToken: redirect.fileToken,
+              offset: offset,
+              limit: chunkSize,
+            ),
+          );
+          if (r is UploadCdnFileReuploadNeeded) {
+            await invoke(
+              UploadReuploadCdnFileRequest(
+                fileToken: redirect.fileToken,
+                requestToken: r.requestToken,
+              ),
+            );
+            continue;
+          }
+          if (r is UploadCdnFileObj) {
+            return _decryptCdn(
+              r.bytes,
+              redirect.encryptionKey,
+              redirect.encryptionIv,
+              offset,
+            );
+          }
+          throw StateError('unexpected cdn response: ${r.runtimeType}');
+        } catch (_) {
+          attempts++;
+          if (attempts >= _maxRetriesPerPart) rethrow;
+          await Future.delayed(
+              Duration(milliseconds: 100 * (1 << attempts.clamp(0, 6))));
+        } finally {
+          cdn.release(worker);
+        }
+      }
+    } finally {
+      await cdn.closeAll();
+    }
+  }
+
+  Uint8List _decryptCdn(
+    Uint8List data,
+    Uint8List key,
+    Uint8List iv,
+    int offset,
+  ) {
+    final ctr = Uint8List.fromList(iv);
+    var counter = offset ~/ 16;
+    for (var i = 15; i >= 12; i--) {
+      ctr[i] = counter & 0xff;
+      counter >>= 8;
+    }
+    return aesCtrDecrypt(data, key, ctr);
   }
 }
 

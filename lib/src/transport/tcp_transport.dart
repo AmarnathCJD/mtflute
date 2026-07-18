@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'proxy.dart';
 import 'transport_mode.dart';
 
 /// A transport-level error frame (4-byte negative int32). The [code] is the
@@ -48,12 +49,15 @@ class TcpTransport {
   bool _closed = false;
   Object? _closeReason;
 
+  final Proxy? proxy;
+
   TcpTransport({
     required this.host,
     required this.port,
     this.modeVariant = TransportModeVariant.abridged,
     this.timeout = const Duration(seconds: 15),
     this.readIdleTimeout = const Duration(seconds: 75),
+    this.proxy,
   });
 
   DateTime _lastReadAt = DateTime.now();
@@ -61,27 +65,39 @@ class TcpTransport {
   bool get isConnected => _socket != null && !_closed;
 
   Future<void> connect() async {
-    _socket = await Socket.connect(host, port, timeout: timeout);
-    _socket!.setOption(SocketOption.tcpNoDelay, true);
     _mode = TransportMode(modeVariant);
     _closed = false;
     _closeReason = null;
-
     _lastReadAt = DateTime.now();
-    _subscription = _socket!.listen(
-      (data) {
-        _lastReadAt = DateTime.now();
-        _readBuffer.add(data);
-        _wakeReaders(null);
-      },
-      onError: (Object e, StackTrace st) {
-        _fail(e);
-      },
-      onDone: () {
-        _fail(const SocketException('Peer closed connection'));
-      },
-      cancelOnError: true,
-    );
+
+    void onData(Uint8List data) {
+      _lastReadAt = DateTime.now();
+      _readBuffer.add(data);
+      _wakeReaders(null);
+    }
+
+    void onErr(Object e, [StackTrace? st]) => _fail(e);
+    void onDone() => _fail(const SocketException('Peer closed connection'));
+
+    if (proxy != null) {
+      final ps = await connectViaProxy(proxy!, host, port, timeout: timeout);
+      _socket = ps.socket;
+      if (ps.leftover.isNotEmpty) _readBuffer.add(ps.leftover);
+      _subscription = ps.subscription
+        ..onData(onData)
+        ..onError(onErr)
+        ..onDone(onDone)
+        ..resume();
+    } else {
+      _socket = await Socket.connect(host, port, timeout: timeout);
+      _socket!.setOption(SocketOption.tcpNoDelay, true);
+      _subscription = _socket!.listen(
+        onData,
+        onError: onErr,
+        onDone: onDone,
+        cancelOnError: true,
+      );
+    }
 
     final announcement = _mode.announcement;
     if (announcement.isNotEmpty) {
