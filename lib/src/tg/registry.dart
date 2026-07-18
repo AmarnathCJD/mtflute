@@ -197,7 +197,7 @@ TlObject decodeObject(TlDecoder d) {
       return StorageFileWebp.decode(d);
     case 0xd3bc4b7a:
       return UserEmpty.decode(d);
-    case 0x31774388:
+    case 0xb1b8cc83:
       return UserObj.decode(d);
     case 0x4f11bae1:
       return UserProfilePhotoEmpty.decode(d);
@@ -221,14 +221,20 @@ TlObject decodeObject(TlDecoder d) {
       return ChatObj.decode(d);
     case 0x6592a1a7:
       return ChatForbidden.decode(d);
-    case 0x1c32b11c:
+    case 0xd49f34c6:
       return Channel.decode(d);
     case 0x17d493d5:
       return ChannelForbidden.decode(d);
+    case 0xfd3cdab8:
+      return CommunityForbidden.decode(d);
+    case 0x65efe954:
+      return Community.decode(d);
     case 0x2633421b:
       return ChatFullObj.decode(d);
     case 0xa04e8d3a:
       return ChannelFull.decode(d);
+    case 0xcbb7a507:
+      return CommunityFull.decode(d);
     case 0x38e79fde:
       return ChatParticipantObj.decode(d);
     case 0xe1f867b8:
@@ -421,10 +427,14 @@ TlObject decodeObject(TlDecoder d) {
       return MessageActionPollDeleteAnswer.decode(d);
     case 0x16605e3e:
       return MessageActionManagedBotCreated.decode(d);
+    case 0x5d20bae8:
+      return MessageActionChangeCommunity.decode(d);
     case 0xfc89f7f3:
       return DialogObj.decode(d);
     case 0x71bd134c:
       return DialogFolder.decode(d);
+    case 0xf78a0973:
+      return DialogCommunity.decode(d);
     case 0x2331b22d:
       return PhotoEmpty.decode(d);
     case 0xfb197a65:
@@ -467,6 +477,8 @@ TlObject decodeObject(TlDecoder d) {
       return InputNotifyBroadcasts.decode(d);
     case 0x5c467992:
       return InputNotifyForumTopic.decode(d);
+    case 0x27bb1adc:
+      return InputNotifyCommunity.decode(d);
     case 0xcacb6ae2:
       return InputPeerNotifySettingsObj.decode(d);
     case 0x99622c0c:
@@ -893,6 +905,14 @@ TlObject decodeObject(TlDecoder d) {
       return UpdateWebBrowserSettings.decode(d);
     case 0x140502d1:
       return UpdateWebBrowserException.decode(d);
+    case 0x20bcbba1:
+      return UpdateNewEphemeralMessage.decode(d);
+    case 0x56dbfcf8:
+      return UpdateDeleteEphemeralMessages.decode(d);
+    case 0x4bbb8f01:
+      return UpdateEditEphemeralMessage.decode(d);
+    case 0x6c0d8e23:
+      return UpdateBotStarsSubscription.decode(d);
     case 0xa56c2a3e:
       return UpdatesStateObj.decode(d);
     case 0x5d75a138:
@@ -995,6 +1015,8 @@ TlObject decodeObject(TlDecoder d) {
       return NotifyBroadcasts.decode(d);
     case 0x226e6308:
       return NotifyForumTopic.decode(d);
+    case 0xbe376999:
+      return NotifyCommunity.decode(d);
     case 0x16bf744e:
       return SendMessageTypingAction.decode(d);
     case 0xfd5ec8f5:
@@ -1237,7 +1259,7 @@ TlObject decodeObject(TlDecoder d) {
       return MessagesStickerSetObj.decode(d);
     case 0xd3f924eb:
       return MessagesStickerSetNotModified.decode(d);
-    case 0xc27ac8c7:
+    case 0x9852d6d2:
       return BotCommandObj.decode(d);
     case 0x4d8a0299:
       return BotInfoObj.decode(d);
@@ -1623,6 +1645,8 @@ TlObject decodeObject(TlDecoder d) {
       return TextMentionName.decode(d);
     case 0xa5b45e2b:
       return TextDate.decode(d);
+    case 0x9686cb50:
+      return TextDiff.decode(d);
     case 0x13567e8a:
       return PageBlockUnsupported.decode(d);
     case 0x70abc3fd:
@@ -1957,10 +1981,14 @@ TlObject decodeObject(TlDecoder d) {
       return InputDialogPeerObj.decode(d);
     case 0x64600527:
       return InputDialogPeerFolder.decode(d);
+    case 0x69ef72c4:
+      return InputDialogPeerCommunity.decode(d);
     case 0xe56dbf05:
       return DialogPeerObj.decode(d);
     case 0x514519e2:
       return DialogPeerFolder.decode(d);
+    case 0x2f65c8e4:
+      return DialogPeerCommunity.decode(d);
     case 0xd54b65d:
       return MessagesFoundStickerSetsNotModified.decode(d);
     case 0x8af09dd2:
@@ -2707,6 +2735,8 @@ TlObject decodeObject(TlDecoder d) {
       return InputReplyToStory.decode(d);
     case 0x69d66c45:
       return InputReplyToMonoForum.decode(d);
+    case 0x4119b95e:
+      return InputReplyToEphemeralMessage.decode(d);
     case 0x3fc9053b:
       return ExportedStoryLinkObj.decode(d);
     case 0x712e27fd:
@@ -3251,6 +3281,8 @@ TlObject decodeObject(TlDecoder d) {
       return InputAiComposeToneID.decode(d);
     case 0x1fa01357:
       return InputAiComposeToneSlug.decode(d);
+    case 0xe0c35af:
+      return InputAiComposeToneSingleUse.decode(d);
     case 0xcff63ea9:
       return AiComposeToneObj.decode(d);
     case 0x9bad6414:
@@ -3265,7 +3297,7 @@ TlObject decodeObject(TlDecoder d) {
       return BotsAccessSettingsObj.decode(d);
     case 0x445663a7:
       return MessagesChatInviteJoinResultOk.decode(d);
-    case 0x2f51c337:
+    case 0x61ca29d3:
       return MessagesChatInviteJoinResultWebView.decode(d);
     case 0xae152a69:
       return JoinChatBotResultApproved.decode(d);
@@ -3293,6 +3325,20 @@ TlObject decodeObject(TlDecoder d) {
       return InputRichMessageMarkdown.decode(d);
     case 0xbaf39d8b:
       return RichMessageObj.decode(d);
+    case 0x76141ebd:
+      return CommunityPeerObj.decode(d);
+    case 0x7beafa85:
+      return CommunityPeerRequestObj.decode(d);
+    case 0x2244afad:
+      return CommunitiesPeerLinkRequestsObj.decode(d);
+    case 0xd9c6dc1a:
+      return EphemeralMessageObj.decode(d);
+    case 0x8d78512a:
+      return CommunitiesParticipantJoinedChatsObj.decode(d);
+    case 0x4203998f:
+      return MessagesTranslatedRichMessageObj.decode(d);
+    case 0x4c4537c8:
+      return MessagesComposedRichMessageWithAIObj.decode(d);
     default:
       throw FormatException('Unknown TL object CRC: 0x${crc.toRadixString(16)}');
   }

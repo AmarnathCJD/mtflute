@@ -21,7 +21,7 @@ import 'session.dart';
 import 'events.dart';
 
 /// Telegram API layer this client targets. Updated when the TL schema is regenerated.
-const apiLayer = 227;
+const apiLayer = 228;
 
 /// Async prompt for credentials (OTP, 2FA password). Used by [MtpClient.login].
 typedef InputCallback = Future<String> Function(String prompt);

@@ -1249,6 +1249,20 @@ abstract class InputRichMessage extends TlObject {}
 
 abstract class RichMessage extends TlObject {}
 
+abstract class CommunityPeer extends TlObject {}
+
+abstract class CommunityPeerRequest extends TlObject {}
+
+abstract class CommunitiesPeerLinkRequests extends TlObject {}
+
+abstract class EphemeralMessage extends TlObject {}
+
+abstract class CommunitiesParticipantJoinedChats extends TlObject {}
+
+abstract class MessagesTranslatedRichMessage extends TlObject {}
+
+abstract class MessagesComposedRichMessageWithAI extends TlObject {}
+
 class ResPQObj extends ResPQ {
   final BigInt nonce;
   final BigInt serverNonce;
@@ -3286,15 +3300,16 @@ class UserObj extends User {
   final int? botActiveUsers;
   final int? botVerificationIcon;
   final int? sendPaidMessagesStars;
-  UserObj({this.self = false, this.contact = false, this.mutualContact = false, this.deleted = false, this.bot = false, this.botChatHistory = false, this.botNochats = false, this.verified = false, this.restricted = false, this.min = false, this.botInlineGeo = false, this.support = false, this.scam = false, this.applyMinPhoto = false, this.fake = false, this.botAttachMenu = false, this.premium = false, this.attachMenuEnabled = false, this.botCanEdit = false, this.closeFriend = false, this.storiesHidden = false, this.storiesUnavailable = false, this.contactRequirePremium = false, this.botBusiness = false, this.botHasMainApp = false, this.botForumView = false, this.botForumCanManageTopics = false, this.botCanManageBots = false, this.botGuestchat = false, this.botGuard = false, required this.id, this.accessHash, this.firstName, this.lastName, this.username, this.phone, this.photo, this.status, this.botInfoVersion, this.restrictionReason, this.botInlinePlaceholder, this.langCode, this.emojiStatus, this.usernames, this.storiesMaxId, this.color, this.profileColor, this.botActiveUsers, this.botVerificationIcon, this.sendPaidMessagesStars, });
+  final int? linkedCommunityId;
+  UserObj({this.self = false, this.contact = false, this.mutualContact = false, this.deleted = false, this.bot = false, this.botChatHistory = false, this.botNochats = false, this.verified = false, this.restricted = false, this.min = false, this.botInlineGeo = false, this.support = false, this.scam = false, this.applyMinPhoto = false, this.fake = false, this.botAttachMenu = false, this.premium = false, this.attachMenuEnabled = false, this.botCanEdit = false, this.closeFriend = false, this.storiesHidden = false, this.storiesUnavailable = false, this.contactRequirePremium = false, this.botBusiness = false, this.botHasMainApp = false, this.botForumView = false, this.botForumCanManageTopics = false, this.botCanManageBots = false, this.botGuestchat = false, this.botGuard = false, required this.id, this.accessHash, this.firstName, this.lastName, this.username, this.phone, this.photo, this.status, this.botInfoVersion, this.restrictionReason, this.botInlinePlaceholder, this.langCode, this.emojiStatus, this.usernames, this.storiesMaxId, this.color, this.profileColor, this.botActiveUsers, this.botVerificationIcon, this.sendPaidMessagesStars, this.linkedCommunityId, });
   @override
-  int get crc => 0x31774388;
+  int get crc => 0xb1b8cc83;
   @override
   void encode(TlEncoder e) {
     e.writeCrc(crc);
     int flags = 0 | (self == true ? (1 << 10) : 0) | (contact == true ? (1 << 11) : 0) | (mutualContact == true ? (1 << 12) : 0) | (deleted == true ? (1 << 13) : 0) | (bot == true ? (1 << 14) : 0) | (botChatHistory == true ? (1 << 15) : 0) | (botNochats == true ? (1 << 16) : 0) | (verified == true ? (1 << 17) : 0) | (restricted == true ? (1 << 18) : 0) | (min == true ? (1 << 20) : 0) | (botInlineGeo == true ? (1 << 21) : 0) | (support == true ? (1 << 23) : 0) | (scam == true ? (1 << 24) : 0) | (applyMinPhoto == true ? (1 << 25) : 0) | (fake == true ? (1 << 26) : 0) | (botAttachMenu == true ? (1 << 27) : 0) | (premium == true ? (1 << 28) : 0) | (attachMenuEnabled == true ? (1 << 29) : 0) | (accessHash != null ? (1 << 0) : 0) | (firstName != null ? (1 << 1) : 0) | (lastName != null ? (1 << 2) : 0) | (username != null ? (1 << 3) : 0) | (phone != null ? (1 << 4) : 0) | (photo != null ? (1 << 5) : 0) | (status != null ? (1 << 6) : 0) | (botInfoVersion != null ? (1 << 14) : 0) | (restrictionReason != null ? (1 << 18) : 0) | (botInlinePlaceholder != null ? (1 << 19) : 0) | (langCode != null ? (1 << 22) : 0) | (emojiStatus != null ? (1 << 30) : 0);
     e.writeUint32(flags);
-    int flags2 = 0 | (botCanEdit == true ? (1 << 1) : 0) | (closeFriend == true ? (1 << 2) : 0) | (storiesHidden == true ? (1 << 3) : 0) | (storiesUnavailable == true ? (1 << 4) : 0) | (contactRequirePremium == true ? (1 << 10) : 0) | (botBusiness == true ? (1 << 11) : 0) | (botHasMainApp == true ? (1 << 13) : 0) | (botForumView == true ? (1 << 16) : 0) | (botForumCanManageTopics == true ? (1 << 17) : 0) | (botCanManageBots == true ? (1 << 18) : 0) | (botGuestchat == true ? (1 << 19) : 0) | (botGuard == true ? (1 << 20) : 0) | (usernames != null ? (1 << 0) : 0) | (storiesMaxId != null ? (1 << 5) : 0) | (color != null ? (1 << 8) : 0) | (profileColor != null ? (1 << 9) : 0) | (botActiveUsers != null ? (1 << 12) : 0) | (botVerificationIcon != null ? (1 << 14) : 0) | (sendPaidMessagesStars != null ? (1 << 15) : 0);
+    int flags2 = 0 | (botCanEdit == true ? (1 << 1) : 0) | (closeFriend == true ? (1 << 2) : 0) | (storiesHidden == true ? (1 << 3) : 0) | (storiesUnavailable == true ? (1 << 4) : 0) | (contactRequirePremium == true ? (1 << 10) : 0) | (botBusiness == true ? (1 << 11) : 0) | (botHasMainApp == true ? (1 << 13) : 0) | (botForumView == true ? (1 << 16) : 0) | (botForumCanManageTopics == true ? (1 << 17) : 0) | (botCanManageBots == true ? (1 << 18) : 0) | (botGuestchat == true ? (1 << 19) : 0) | (botGuard == true ? (1 << 20) : 0) | (usernames != null ? (1 << 0) : 0) | (storiesMaxId != null ? (1 << 5) : 0) | (color != null ? (1 << 8) : 0) | (profileColor != null ? (1 << 9) : 0) | (botActiveUsers != null ? (1 << 12) : 0) | (botVerificationIcon != null ? (1 << 14) : 0) | (sendPaidMessagesStars != null ? (1 << 15) : 0) | (linkedCommunityId != null ? (1 << 21) : 0);
     e.writeUint32(flags2);
     e.writeInt64(id);
     if (accessHash != null) { e.writeInt64(accessHash!); }
@@ -3316,6 +3331,7 @@ class UserObj extends User {
     if (botActiveUsers != null) { e.writeInt32(botActiveUsers!); }
     if (botVerificationIcon != null) { e.writeInt64(botVerificationIcon!); }
     if (sendPaidMessagesStars != null) { e.writeInt64(sendPaidMessagesStars!); }
+    if (linkedCommunityId != null) { e.writeInt64(linkedCommunityId!); }
   }
   static UserObj decode(TlDecoder d) {
     final flags = d.readUint32();
@@ -3370,7 +3386,8 @@ class UserObj extends User {
     final int? botActiveUsers = (flags2 & (1 << 12)) != 0 ? d.readInt32() : null;
     final int? botVerificationIcon = (flags2 & (1 << 14)) != 0 ? d.readInt64() : null;
     final int? sendPaidMessagesStars = (flags2 & (1 << 15)) != 0 ? d.readInt64() : null;
-    return UserObj(self: self, contact: contact, mutualContact: mutualContact, deleted: deleted, bot: bot, botChatHistory: botChatHistory, botNochats: botNochats, verified: verified, restricted: restricted, min: min, botInlineGeo: botInlineGeo, support: support, scam: scam, applyMinPhoto: applyMinPhoto, fake: fake, botAttachMenu: botAttachMenu, premium: premium, attachMenuEnabled: attachMenuEnabled, botCanEdit: botCanEdit, closeFriend: closeFriend, storiesHidden: storiesHidden, storiesUnavailable: storiesUnavailable, contactRequirePremium: contactRequirePremium, botBusiness: botBusiness, botHasMainApp: botHasMainApp, botForumView: botForumView, botForumCanManageTopics: botForumCanManageTopics, botCanManageBots: botCanManageBots, botGuestchat: botGuestchat, botGuard: botGuard, id: id, accessHash: accessHash, firstName: firstName, lastName: lastName, username: username, phone: phone, photo: photo, status: status, botInfoVersion: botInfoVersion, restrictionReason: restrictionReason, botInlinePlaceholder: botInlinePlaceholder, langCode: langCode, emojiStatus: emojiStatus, usernames: usernames, storiesMaxId: storiesMaxId, color: color, profileColor: profileColor, botActiveUsers: botActiveUsers, botVerificationIcon: botVerificationIcon, sendPaidMessagesStars: sendPaidMessagesStars, );
+    final int? linkedCommunityId = (flags2 & (1 << 21)) != 0 ? d.readInt64() : null;
+    return UserObj(self: self, contact: contact, mutualContact: mutualContact, deleted: deleted, bot: bot, botChatHistory: botChatHistory, botNochats: botNochats, verified: verified, restricted: restricted, min: min, botInlineGeo: botInlineGeo, support: support, scam: scam, applyMinPhoto: applyMinPhoto, fake: fake, botAttachMenu: botAttachMenu, premium: premium, attachMenuEnabled: attachMenuEnabled, botCanEdit: botCanEdit, closeFriend: closeFriend, storiesHidden: storiesHidden, storiesUnavailable: storiesUnavailable, contactRequirePremium: contactRequirePremium, botBusiness: botBusiness, botHasMainApp: botHasMainApp, botForumView: botForumView, botForumCanManageTopics: botForumCanManageTopics, botCanManageBots: botCanManageBots, botGuestchat: botGuestchat, botGuard: botGuard, id: id, accessHash: accessHash, firstName: firstName, lastName: lastName, username: username, phone: phone, photo: photo, status: status, botInfoVersion: botInfoVersion, restrictionReason: restrictionReason, botInlinePlaceholder: botInlinePlaceholder, langCode: langCode, emojiStatus: emojiStatus, usernames: usernames, storiesMaxId: storiesMaxId, color: color, profileColor: profileColor, botActiveUsers: botActiveUsers, botVerificationIcon: botVerificationIcon, sendPaidMessagesStars: sendPaidMessagesStars, linkedCommunityId: linkedCommunityId, );
   }
 }
 
@@ -3655,15 +3672,16 @@ class Channel extends Chat {
   final int? botVerificationIcon;
   final int? sendPaidMessagesStars;
   final int? linkedMonoforumId;
-  Channel({this.creator = false, this.left = false, this.broadcast = false, this.verified = false, this.megagroup = false, this.restricted = false, this.signatures = false, this.min = false, this.scam = false, this.hasLink = false, this.hasGeo = false, this.slowmodeEnabled = false, this.callActive = false, this.callNotEmpty = false, this.fake = false, this.gigagroup = false, this.noforwards = false, this.joinToSend = false, this.joinRequest = false, this.forum = false, this.storiesHidden = false, this.storiesHiddenMin = false, this.storiesUnavailable = false, this.signatureProfiles = false, this.autotranslation = false, this.broadcastMessagesAllowed = false, this.monoforum = false, this.forumTabs = false, required this.id, this.accessHash, required this.title, this.username, required this.photo, required this.date, this.restrictionReason, this.adminRights, this.bannedRights, this.defaultBannedRights, this.participantsCount, this.usernames, this.storiesMaxId, this.color, this.profileColor, this.emojiStatus, this.level, this.subscriptionUntilDate, this.botVerificationIcon, this.sendPaidMessagesStars, this.linkedMonoforumId, });
+  final int? linkedCommunityId;
+  Channel({this.creator = false, this.left = false, this.broadcast = false, this.verified = false, this.megagroup = false, this.restricted = false, this.signatures = false, this.min = false, this.scam = false, this.hasLink = false, this.hasGeo = false, this.slowmodeEnabled = false, this.callActive = false, this.callNotEmpty = false, this.fake = false, this.gigagroup = false, this.noforwards = false, this.joinToSend = false, this.joinRequest = false, this.forum = false, this.storiesHidden = false, this.storiesHiddenMin = false, this.storiesUnavailable = false, this.signatureProfiles = false, this.autotranslation = false, this.broadcastMessagesAllowed = false, this.monoforum = false, this.forumTabs = false, required this.id, this.accessHash, required this.title, this.username, required this.photo, required this.date, this.restrictionReason, this.adminRights, this.bannedRights, this.defaultBannedRights, this.participantsCount, this.usernames, this.storiesMaxId, this.color, this.profileColor, this.emojiStatus, this.level, this.subscriptionUntilDate, this.botVerificationIcon, this.sendPaidMessagesStars, this.linkedMonoforumId, this.linkedCommunityId, });
   @override
-  int get crc => 0x1c32b11c;
+  int get crc => 0xd49f34c6;
   @override
   void encode(TlEncoder e) {
     e.writeCrc(crc);
     int flags = 0 | (creator == true ? (1 << 0) : 0) | (left == true ? (1 << 2) : 0) | (broadcast == true ? (1 << 5) : 0) | (verified == true ? (1 << 7) : 0) | (megagroup == true ? (1 << 8) : 0) | (restricted == true ? (1 << 9) : 0) | (signatures == true ? (1 << 11) : 0) | (min == true ? (1 << 12) : 0) | (scam == true ? (1 << 19) : 0) | (hasLink == true ? (1 << 20) : 0) | (hasGeo == true ? (1 << 21) : 0) | (slowmodeEnabled == true ? (1 << 22) : 0) | (callActive == true ? (1 << 23) : 0) | (callNotEmpty == true ? (1 << 24) : 0) | (fake == true ? (1 << 25) : 0) | (gigagroup == true ? (1 << 26) : 0) | (noforwards == true ? (1 << 27) : 0) | (joinToSend == true ? (1 << 28) : 0) | (joinRequest == true ? (1 << 29) : 0) | (forum == true ? (1 << 30) : 0) | (accessHash != null ? (1 << 13) : 0) | (username != null ? (1 << 6) : 0) | (restrictionReason != null ? (1 << 9) : 0) | (adminRights != null ? (1 << 14) : 0) | (bannedRights != null ? (1 << 15) : 0) | (defaultBannedRights != null ? (1 << 18) : 0) | (participantsCount != null ? (1 << 17) : 0);
     e.writeUint32(flags);
-    int flags2 = 0 | (storiesHidden == true ? (1 << 1) : 0) | (storiesHiddenMin == true ? (1 << 2) : 0) | (storiesUnavailable == true ? (1 << 3) : 0) | (signatureProfiles == true ? (1 << 12) : 0) | (autotranslation == true ? (1 << 15) : 0) | (broadcastMessagesAllowed == true ? (1 << 16) : 0) | (monoforum == true ? (1 << 17) : 0) | (forumTabs == true ? (1 << 19) : 0) | (usernames != null ? (1 << 0) : 0) | (storiesMaxId != null ? (1 << 4) : 0) | (color != null ? (1 << 7) : 0) | (profileColor != null ? (1 << 8) : 0) | (emojiStatus != null ? (1 << 9) : 0) | (level != null ? (1 << 10) : 0) | (subscriptionUntilDate != null ? (1 << 11) : 0) | (botVerificationIcon != null ? (1 << 13) : 0) | (sendPaidMessagesStars != null ? (1 << 14) : 0) | (linkedMonoforumId != null ? (1 << 18) : 0);
+    int flags2 = 0 | (storiesHidden == true ? (1 << 1) : 0) | (storiesHiddenMin == true ? (1 << 2) : 0) | (storiesUnavailable == true ? (1 << 3) : 0) | (signatureProfiles == true ? (1 << 12) : 0) | (autotranslation == true ? (1 << 15) : 0) | (broadcastMessagesAllowed == true ? (1 << 16) : 0) | (monoforum == true ? (1 << 17) : 0) | (forumTabs == true ? (1 << 19) : 0) | (usernames != null ? (1 << 0) : 0) | (storiesMaxId != null ? (1 << 4) : 0) | (color != null ? (1 << 7) : 0) | (profileColor != null ? (1 << 8) : 0) | (emojiStatus != null ? (1 << 9) : 0) | (level != null ? (1 << 10) : 0) | (subscriptionUntilDate != null ? (1 << 11) : 0) | (botVerificationIcon != null ? (1 << 13) : 0) | (sendPaidMessagesStars != null ? (1 << 14) : 0) | (linkedMonoforumId != null ? (1 << 18) : 0) | (linkedCommunityId != null ? (1 << 20) : 0);
     e.writeUint32(flags2);
     e.writeInt64(id);
     if (accessHash != null) { e.writeInt64(accessHash!); }
@@ -3686,6 +3704,7 @@ class Channel extends Chat {
     if (botVerificationIcon != null) { e.writeInt64(botVerificationIcon!); }
     if (sendPaidMessagesStars != null) { e.writeInt64(sendPaidMessagesStars!); }
     if (linkedMonoforumId != null) { e.writeInt64(linkedMonoforumId!); }
+    if (linkedCommunityId != null) { e.writeInt64(linkedCommunityId!); }
   }
   static Channel decode(TlDecoder d) {
     final flags = d.readUint32();
@@ -3739,7 +3758,8 @@ class Channel extends Chat {
     final int? botVerificationIcon = (flags2 & (1 << 13)) != 0 ? d.readInt64() : null;
     final int? sendPaidMessagesStars = (flags2 & (1 << 14)) != 0 ? d.readInt64() : null;
     final int? linkedMonoforumId = (flags2 & (1 << 18)) != 0 ? d.readInt64() : null;
-    return Channel(creator: creator, left: left, broadcast: broadcast, verified: verified, megagroup: megagroup, restricted: restricted, signatures: signatures, min: min, scam: scam, hasLink: hasLink, hasGeo: hasGeo, slowmodeEnabled: slowmodeEnabled, callActive: callActive, callNotEmpty: callNotEmpty, fake: fake, gigagroup: gigagroup, noforwards: noforwards, joinToSend: joinToSend, joinRequest: joinRequest, forum: forum, storiesHidden: storiesHidden, storiesHiddenMin: storiesHiddenMin, storiesUnavailable: storiesUnavailable, signatureProfiles: signatureProfiles, autotranslation: autotranslation, broadcastMessagesAllowed: broadcastMessagesAllowed, monoforum: monoforum, forumTabs: forumTabs, id: id, accessHash: accessHash, title: title, username: username, photo: photo, date: date, restrictionReason: restrictionReason, adminRights: adminRights, bannedRights: bannedRights, defaultBannedRights: defaultBannedRights, participantsCount: participantsCount, usernames: usernames, storiesMaxId: storiesMaxId, color: color, profileColor: profileColor, emojiStatus: emojiStatus, level: level, subscriptionUntilDate: subscriptionUntilDate, botVerificationIcon: botVerificationIcon, sendPaidMessagesStars: sendPaidMessagesStars, linkedMonoforumId: linkedMonoforumId, );
+    final int? linkedCommunityId = (flags2 & (1 << 20)) != 0 ? d.readInt64() : null;
+    return Channel(creator: creator, left: left, broadcast: broadcast, verified: verified, megagroup: megagroup, restricted: restricted, signatures: signatures, min: min, scam: scam, hasLink: hasLink, hasGeo: hasGeo, slowmodeEnabled: slowmodeEnabled, callActive: callActive, callNotEmpty: callNotEmpty, fake: fake, gigagroup: gigagroup, noforwards: noforwards, joinToSend: joinToSend, joinRequest: joinRequest, forum: forum, storiesHidden: storiesHidden, storiesHiddenMin: storiesHiddenMin, storiesUnavailable: storiesUnavailable, signatureProfiles: signatureProfiles, autotranslation: autotranslation, broadcastMessagesAllowed: broadcastMessagesAllowed, monoforum: monoforum, forumTabs: forumTabs, id: id, accessHash: accessHash, title: title, username: username, photo: photo, date: date, restrictionReason: restrictionReason, adminRights: adminRights, bannedRights: bannedRights, defaultBannedRights: defaultBannedRights, participantsCount: participantsCount, usernames: usernames, storiesMaxId: storiesMaxId, color: color, profileColor: profileColor, emojiStatus: emojiStatus, level: level, subscriptionUntilDate: subscriptionUntilDate, botVerificationIcon: botVerificationIcon, sendPaidMessagesStars: sendPaidMessagesStars, linkedMonoforumId: linkedMonoforumId, linkedCommunityId: linkedCommunityId, );
   }
 }
 
@@ -3774,6 +3794,79 @@ class ChannelForbidden extends Chat {
     final title = d.readString();
     final int? untilDate = (flags & (1 << 16)) != 0 ? d.readInt32() : null;
     return ChannelForbidden(broadcast: broadcast, megagroup: megagroup, monoforum: monoforum, id: id, accessHash: accessHash, title: title, untilDate: untilDate, );
+  }
+}
+
+class CommunityForbidden extends Chat {
+  final int id;
+  final int? accessHash;
+  final String title;
+  CommunityForbidden({required this.id, this.accessHash, required this.title, });
+  @override
+  int get crc => 0xfd3cdab8;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (accessHash != null ? (1 << 13) : 0);
+    e.writeUint32(flags);
+    e.writeInt64(id);
+    if (accessHash != null) { e.writeInt64(accessHash!); }
+    e.writeString(title);
+  }
+  static CommunityForbidden decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final id = d.readInt64();
+    final int? accessHash = (flags & (1 << 13)) != 0 ? d.readInt64() : null;
+    final title = d.readString();
+    return CommunityForbidden(id: id, accessHash: accessHash, title: title, );
+  }
+}
+
+class Community extends Chat {
+  final bool creator;
+  final bool left;
+  final bool min;
+  final bool collapsedInDialogs;
+  final int id;
+  final int? accessHash;
+  final String title;
+  final ChatPhoto photo;
+  final int date;
+  final ChatAdminRights? adminRights;
+  final ChatBannedRights? defaultBannedRights;
+  Community({this.creator = false, this.left = false, this.min = false, this.collapsedInDialogs = false, required this.id, this.accessHash, required this.title, required this.photo, required this.date, this.adminRights, this.defaultBannedRights, });
+  @override
+  int get crc => 0x65efe954;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (creator == true ? (1 << 0) : 0) | (left == true ? (1 << 2) : 0) | (min == true ? (1 << 12) : 0) | (accessHash != null ? (1 << 13) : 0) | (adminRights != null ? (1 << 14) : 0) | (defaultBannedRights != null ? (1 << 18) : 0);
+    e.writeUint32(flags);
+    int flags2 = 0 | (collapsedInDialogs == true ? (1 << 20) : 0);
+    e.writeUint32(flags2);
+    e.writeInt64(id);
+    if (accessHash != null) { e.writeInt64(accessHash!); }
+    e.writeString(title);
+    photo.encode(e);
+    e.writeInt32(date);
+    if (adminRights != null) { adminRights!.encode(e); }
+    if (defaultBannedRights != null) { defaultBannedRights!.encode(e); }
+  }
+  static Community decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final creator = (flags & (1 << 0)) != 0;
+    final left = (flags & (1 << 2)) != 0;
+    final min = (flags & (1 << 12)) != 0;
+    final flags2 = d.readUint32();
+    final collapsedInDialogs = (flags2 & (1 << 20)) != 0;
+    final id = d.readInt64();
+    final int? accessHash = (flags & (1 << 13)) != 0 ? d.readInt64() : null;
+    final title = d.readString();
+    final photo = decodeObject(d) as ChatPhoto;
+    final date = d.readInt32();
+    final ChatAdminRights? adminRights = (flags & (1 << 14)) != 0 ? decodeObject(d) as ChatAdminRights : null;
+    final ChatBannedRights? defaultBannedRights = (flags & (1 << 18)) != 0 ? decodeObject(d) as ChatBannedRights : null;
+    return Community(creator: creator, left: left, min: min, collapsedInDialogs: collapsedInDialogs, id: id, accessHash: accessHash, title: title, photo: photo, date: date, adminRights: adminRights, defaultBannedRights: defaultBannedRights, );
   }
 }
 
@@ -4046,6 +4139,43 @@ class ChannelFull extends ChatFull {
     final ProfileTab? mainTab = (flags2 & (1 << 22)) != 0 ? decodeObject(d) as ProfileTab : null;
     final int? guardBotId = (flags2 & (1 << 23)) != 0 ? d.readInt64() : null;
     return ChannelFull(canViewParticipants: canViewParticipants, canSetUsername: canSetUsername, canSetStickers: canSetStickers, hiddenPrehistory: hiddenPrehistory, canSetLocation: canSetLocation, hasScheduled: hasScheduled, canViewStats: canViewStats, blocked: blocked, canDeleteChannel: canDeleteChannel, antispam: antispam, participantsHidden: participantsHidden, translationsDisabled: translationsDisabled, storiesPinnedAvailable: storiesPinnedAvailable, viewForumAsMessages: viewForumAsMessages, restrictedSponsored: restrictedSponsored, canViewRevenue: canViewRevenue, paidMediaAllowed: paidMediaAllowed, canViewStarsRevenue: canViewStarsRevenue, paidReactionsAvailable: paidReactionsAvailable, stargiftsAvailable: stargiftsAvailable, paidMessagesAvailable: paidMessagesAvailable, id: id, about: about, participantsCount: participantsCount, adminsCount: adminsCount, kickedCount: kickedCount, bannedCount: bannedCount, onlineCount: onlineCount, readInboxMaxId: readInboxMaxId, readOutboxMaxId: readOutboxMaxId, unreadCount: unreadCount, chatPhoto: chatPhoto, notifySettings: notifySettings, exportedInvite: exportedInvite, botInfo: botInfo, migratedFromChatId: migratedFromChatId, migratedFromMaxId: migratedFromMaxId, pinnedMsgId: pinnedMsgId, stickerset: stickerset, availableMinId: availableMinId, folderId: folderId, linkedChatId: linkedChatId, location: location, slowmodeSeconds: slowmodeSeconds, slowmodeNextSendDate: slowmodeNextSendDate, statsDc: statsDc, pts: pts, call: call, ttlPeriod: ttlPeriod, pendingSuggestions: pendingSuggestions, groupcallDefaultJoinAs: groupcallDefaultJoinAs, themeEmoticon: themeEmoticon, requestsPending: requestsPending, recentRequesters: recentRequesters, defaultSendAs: defaultSendAs, availableReactions: availableReactions, reactionsLimit: reactionsLimit, stories: stories, wallpaper: wallpaper, boostsApplied: boostsApplied, boostsUnrestrict: boostsUnrestrict, emojiset: emojiset, botVerification: botVerification, stargiftsCount: stargiftsCount, sendPaidMessagesStars: sendPaidMessagesStars, mainTab: mainTab, guardBotId: guardBotId, );
+  }
+}
+
+class CommunityFull extends ChatFull {
+  final int id;
+  final String about;
+  final Photo chatPhoto;
+  final List<CommunityPeer> linkedPeers;
+  final int? adminsCount;
+  final int? kickedCount;
+  final int? peerLinkRequestsPending;
+  CommunityFull({required this.id, required this.about, required this.chatPhoto, required this.linkedPeers, this.adminsCount, this.kickedCount, this.peerLinkRequestsPending, });
+  @override
+  int get crc => 0xcbb7a507;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (adminsCount != null ? (1 << 1) : 0) | (kickedCount != null ? (1 << 2) : 0) | (peerLinkRequestsPending != null ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    e.writeInt64(id);
+    e.writeString(about);
+    chatPhoto.encode(e);
+    e.writeCrc(0x1cb5c415); e.writeInt32(linkedPeers.length); for (final item in linkedPeers) { item.encode(e); }
+    if (adminsCount != null) { e.writeInt32(adminsCount!); }
+    if (kickedCount != null) { e.writeInt32(kickedCount!); }
+    if (peerLinkRequestsPending != null) { e.writeInt32(peerLinkRequestsPending!); }
+  }
+  static CommunityFull decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final id = d.readInt64();
+    final about = d.readString();
+    final chatPhoto = decodeObject(d) as Photo;
+    final linkedPeers = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as CommunityPeer); }();
+    final int? adminsCount = (flags & (1 << 1)) != 0 ? d.readInt32() : null;
+    final int? kickedCount = (flags & (1 << 2)) != 0 ? d.readInt32() : null;
+    final int? peerLinkRequestsPending = (flags & (1 << 0)) != 0 ? d.readInt32() : null;
+    return CommunityFull(id: id, about: about, chatPhoto: chatPhoto, linkedPeers: linkedPeers, adminsCount: adminsCount, kickedCount: kickedCount, peerLinkRequestsPending: peerLinkRequestsPending, );
   }
 }
 
@@ -6440,6 +6570,25 @@ class MessageActionManagedBotCreated extends MessageAction {
   }
 }
 
+class MessageActionChangeCommunity extends MessageAction {
+  final int? communityId;
+  MessageActionChangeCommunity({this.communityId, });
+  @override
+  int get crc => 0x5d20bae8;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (communityId != null ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    if (communityId != null) { e.writeInt64(communityId!); }
+  }
+  static MessageActionChangeCommunity decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final int? communityId = (flags & (1 << 0)) != 0 ? d.readInt64() : null;
+    return MessageActionChangeCommunity(communityId: communityId, );
+  }
+}
+
 class DialogObj extends Dialog {
   final bool pinned;
   final bool unreadMark;
@@ -6537,6 +6686,30 @@ class DialogFolder extends Dialog {
     final unreadMutedMessagesCount = d.readInt32();
     final unreadUnmutedMessagesCount = d.readInt32();
     return DialogFolder(pinned: pinned, folder: folder, peer: peer, topMessage: topMessage, unreadMutedPeersCount: unreadMutedPeersCount, unreadUnmutedPeersCount: unreadUnmutedPeersCount, unreadMutedMessagesCount: unreadMutedMessagesCount, unreadUnmutedMessagesCount: unreadUnmutedMessagesCount, );
+  }
+}
+
+class DialogCommunity extends Dialog {
+  final bool pinned;
+  final int communityId;
+  final PeerNotifySettings notifySettings;
+  DialogCommunity({this.pinned = false, required this.communityId, required this.notifySettings, });
+  @override
+  int get crc => 0xf78a0973;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (pinned == true ? (1 << 2) : 0);
+    e.writeUint32(flags);
+    e.writeInt64(communityId);
+    notifySettings.encode(e);
+  }
+  static DialogCommunity decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final pinned = (flags & (1 << 2)) != 0;
+    final communityId = d.readInt64();
+    final notifySettings = decodeObject(d) as PeerNotifySettings;
+    return DialogCommunity(pinned: pinned, communityId: communityId, notifySettings: notifySettings, );
   }
 }
 
@@ -6982,6 +7155,22 @@ class InputNotifyForumTopic extends InputNotifyPeer {
     final peer = decodeObject(d) as InputPeer;
     final topMsgId = d.readInt32();
     return InputNotifyForumTopic(peer: peer, topMsgId: topMsgId, );
+  }
+}
+
+class InputNotifyCommunity extends InputNotifyPeer {
+  final InputChannel community;
+  InputNotifyCommunity({required this.community, });
+  @override
+  int get crc => 0x27bb1adc;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    community.encode(e);
+  }
+  static InputNotifyCommunity decode(TlDecoder d) {
+    final community = decodeObject(d) as InputChannel;
+    return InputNotifyCommunity(community: community, );
   }
 }
 
@@ -11661,6 +11850,88 @@ class UpdateWebBrowserException extends Update {
   }
 }
 
+class UpdateNewEphemeralMessage extends Update {
+  final EphemeralMessage message;
+  UpdateNewEphemeralMessage({required this.message, });
+  @override
+  int get crc => 0x20bcbba1;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    message.encode(e);
+  }
+  static UpdateNewEphemeralMessage decode(TlDecoder d) {
+    final message = decodeObject(d) as EphemeralMessage;
+    return UpdateNewEphemeralMessage(message: message, );
+  }
+}
+
+class UpdateDeleteEphemeralMessages extends Update {
+  final Peer peer;
+  final List<int> ids;
+  UpdateDeleteEphemeralMessages({required this.peer, required this.ids, });
+  @override
+  int get crc => 0x56dbfcf8;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    peer.encode(e);
+    e.writeCrc(0x1cb5c415); e.writeInt32(ids.length); for (final item in ids) { e.writeInt32(item); }
+  }
+  static UpdateDeleteEphemeralMessages decode(TlDecoder d) {
+    final peer = decodeObject(d) as Peer;
+    final ids = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => d.readInt32()); }();
+    return UpdateDeleteEphemeralMessages(peer: peer, ids: ids, );
+  }
+}
+
+class UpdateEditEphemeralMessage extends Update {
+  final EphemeralMessage message;
+  UpdateEditEphemeralMessage({required this.message, });
+  @override
+  int get crc => 0x4bbb8f01;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    message.encode(e);
+  }
+  static UpdateEditEphemeralMessage decode(TlDecoder d) {
+    final message = decodeObject(d) as EphemeralMessage;
+    return UpdateEditEphemeralMessage(message: message, );
+  }
+}
+
+class UpdateBotStarsSubscription extends Update {
+  final bool canceled;
+  final bool paymentFailed;
+  final bool restored;
+  final int userId;
+  final Uint8List payload;
+  final int qts;
+  UpdateBotStarsSubscription({this.canceled = false, this.paymentFailed = false, this.restored = false, required this.userId, required this.payload, required this.qts, });
+  @override
+  int get crc => 0x6c0d8e23;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (canceled == true ? (1 << 0) : 0) | (paymentFailed == true ? (1 << 1) : 0) | (restored == true ? (1 << 2) : 0);
+    e.writeUint32(flags);
+    e.writeInt64(userId);
+    e.writeBytes(payload);
+    e.writeInt32(qts);
+  }
+  static UpdateBotStarsSubscription decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final canceled = (flags & (1 << 0)) != 0;
+    final paymentFailed = (flags & (1 << 1)) != 0;
+    final restored = (flags & (1 << 2)) != 0;
+    final userId = d.readInt64();
+    final payload = d.readBytes();
+    final qts = d.readInt32();
+    return UpdateBotStarsSubscription(canceled: canceled, paymentFailed: paymentFailed, restored: restored, userId: userId, payload: payload, qts: qts, );
+  }
+}
+
 class UpdatesStateObj extends UpdatesState {
   final int pts;
   final int qts;
@@ -13016,6 +13287,22 @@ class NotifyForumTopic extends NotifyPeer {
     final peer = decodeObject(d) as Peer;
     final topMsgId = d.readInt32();
     return NotifyForumTopic(peer: peer, topMsgId: topMsgId, );
+  }
+}
+
+class NotifyCommunity extends NotifyPeer {
+  final int communityId;
+  NotifyCommunity({required this.communityId, });
+  @override
+  int get crc => 0xbe376999;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    e.writeInt64(communityId);
+  }
+  static NotifyCommunity decode(TlDecoder d) {
+    final communityId = d.readInt64();
+    return NotifyCommunity(communityId: communityId, );
   }
 }
 
@@ -15186,21 +15473,26 @@ class MessagesStickerSetNotModified extends MessagesStickerSet {
 }
 
 class BotCommandObj extends BotCommand {
+  final bool ephemeral;
   final String command;
   final String description;
-  BotCommandObj({required this.command, required this.description, });
+  BotCommandObj({this.ephemeral = false, required this.command, required this.description, });
   @override
-  int get crc => 0xc27ac8c7;
+  int get crc => 0x9852d6d2;
   @override
   void encode(TlEncoder e) {
     e.writeCrc(crc);
+    int flags = 0 | (ephemeral == true ? (1 << 0) : 0);
+    e.writeUint32(flags);
     e.writeString(command);
     e.writeString(description);
   }
   static BotCommandObj decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final ephemeral = (flags & (1 << 0)) != 0;
     final command = d.readString();
     final description = d.readString();
-    return BotCommandObj(command: command, description: description, );
+    return BotCommandObj(ephemeral: ephemeral, command: command, description: description, );
   }
 }
 
@@ -19424,6 +19716,25 @@ class TextDate extends RichText {
   }
 }
 
+class TextDiff extends RichText {
+  final RichText text;
+  final RichText oldText;
+  TextDiff({required this.text, required this.oldText, });
+  @override
+  int get crc => 0x9686cb50;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    text.encode(e);
+    oldText.encode(e);
+  }
+  static TextDiff decode(TlDecoder d) {
+    final text = decodeObject(d) as RichText;
+    final oldText = decodeObject(d) as RichText;
+    return TextDiff(text: text, oldText: oldText, );
+  }
+}
+
 class PageBlockUnsupported extends PageBlock {
   PageBlockUnsupported();
   @override
@@ -22997,6 +23308,22 @@ class InputDialogPeerFolder extends InputDialogPeer {
   }
 }
 
+class InputDialogPeerCommunity extends InputDialogPeer {
+  final InputChannel community;
+  InputDialogPeerCommunity({required this.community, });
+  @override
+  int get crc => 0x69ef72c4;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    community.encode(e);
+  }
+  static InputDialogPeerCommunity decode(TlDecoder d) {
+    final community = decodeObject(d) as InputChannel;
+    return InputDialogPeerCommunity(community: community, );
+  }
+}
+
 class DialogPeerObj extends DialogPeer {
   final Peer peer;
   DialogPeerObj({required this.peer, });
@@ -23026,6 +23353,22 @@ class DialogPeerFolder extends DialogPeer {
   static DialogPeerFolder decode(TlDecoder d) {
     final folderId = d.readInt32();
     return DialogPeerFolder(folderId: folderId, );
+  }
+}
+
+class DialogPeerCommunity extends DialogPeer {
+  final int communityId;
+  DialogPeerCommunity({required this.communityId, });
+  @override
+  int get crc => 0x2f65c8e4;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    e.writeInt64(communityId);
+  }
+  static DialogPeerCommunity decode(TlDecoder d) {
+    final communityId = d.readInt64();
+    return DialogPeerCommunity(communityId: communityId, );
   }
 }
 
@@ -24794,13 +25137,14 @@ class ChatAdminRightsObj extends ChatAdminRights {
   final bool deleteStories;
   final bool manageDirectMessages;
   final bool manageRanks;
-  ChatAdminRightsObj({this.changeInfo = false, this.postMessages = false, this.editMessages = false, this.deleteMessages = false, this.banUsers = false, this.inviteUsers = false, this.pinMessages = false, this.addAdmins = false, this.anonymous = false, this.manageCall = false, this.other = false, this.manageTopics = false, this.postStories = false, this.editStories = false, this.deleteStories = false, this.manageDirectMessages = false, this.manageRanks = false, });
+  final bool manageLinkedPeers;
+  ChatAdminRightsObj({this.changeInfo = false, this.postMessages = false, this.editMessages = false, this.deleteMessages = false, this.banUsers = false, this.inviteUsers = false, this.pinMessages = false, this.addAdmins = false, this.anonymous = false, this.manageCall = false, this.other = false, this.manageTopics = false, this.postStories = false, this.editStories = false, this.deleteStories = false, this.manageDirectMessages = false, this.manageRanks = false, this.manageLinkedPeers = false, });
   @override
   int get crc => 0x5fb224d5;
   @override
   void encode(TlEncoder e) {
     e.writeCrc(crc);
-    int flags = 0 | (changeInfo == true ? (1 << 0) : 0) | (postMessages == true ? (1 << 1) : 0) | (editMessages == true ? (1 << 2) : 0) | (deleteMessages == true ? (1 << 3) : 0) | (banUsers == true ? (1 << 4) : 0) | (inviteUsers == true ? (1 << 5) : 0) | (pinMessages == true ? (1 << 7) : 0) | (addAdmins == true ? (1 << 9) : 0) | (anonymous == true ? (1 << 10) : 0) | (manageCall == true ? (1 << 11) : 0) | (other == true ? (1 << 12) : 0) | (manageTopics == true ? (1 << 13) : 0) | (postStories == true ? (1 << 14) : 0) | (editStories == true ? (1 << 15) : 0) | (deleteStories == true ? (1 << 16) : 0) | (manageDirectMessages == true ? (1 << 17) : 0) | (manageRanks == true ? (1 << 18) : 0);
+    int flags = 0 | (changeInfo == true ? (1 << 0) : 0) | (postMessages == true ? (1 << 1) : 0) | (editMessages == true ? (1 << 2) : 0) | (deleteMessages == true ? (1 << 3) : 0) | (banUsers == true ? (1 << 4) : 0) | (inviteUsers == true ? (1 << 5) : 0) | (pinMessages == true ? (1 << 7) : 0) | (addAdmins == true ? (1 << 9) : 0) | (anonymous == true ? (1 << 10) : 0) | (manageCall == true ? (1 << 11) : 0) | (other == true ? (1 << 12) : 0) | (manageTopics == true ? (1 << 13) : 0) | (postStories == true ? (1 << 14) : 0) | (editStories == true ? (1 << 15) : 0) | (deleteStories == true ? (1 << 16) : 0) | (manageDirectMessages == true ? (1 << 17) : 0) | (manageRanks == true ? (1 << 18) : 0) | (manageLinkedPeers == true ? (1 << 19) : 0);
     e.writeUint32(flags);
   }
   static ChatAdminRightsObj decode(TlDecoder d) {
@@ -24822,7 +25166,8 @@ class ChatAdminRightsObj extends ChatAdminRights {
     final deleteStories = (flags & (1 << 16)) != 0;
     final manageDirectMessages = (flags & (1 << 17)) != 0;
     final manageRanks = (flags & (1 << 18)) != 0;
-    return ChatAdminRightsObj(changeInfo: changeInfo, postMessages: postMessages, editMessages: editMessages, deleteMessages: deleteMessages, banUsers: banUsers, inviteUsers: inviteUsers, pinMessages: pinMessages, addAdmins: addAdmins, anonymous: anonymous, manageCall: manageCall, other: other, manageTopics: manageTopics, postStories: postStories, editStories: editStories, deleteStories: deleteStories, manageDirectMessages: manageDirectMessages, manageRanks: manageRanks, );
+    final manageLinkedPeers = (flags & (1 << 19)) != 0;
+    return ChatAdminRightsObj(changeInfo: changeInfo, postMessages: postMessages, editMessages: editMessages, deleteMessages: deleteMessages, banUsers: banUsers, inviteUsers: inviteUsers, pinMessages: pinMessages, addAdmins: addAdmins, anonymous: anonymous, manageCall: manageCall, other: other, manageTopics: manageTopics, postStories: postStories, editStories: editStories, deleteStories: deleteStories, manageDirectMessages: manageDirectMessages, manageRanks: manageRanks, manageLinkedPeers: manageLinkedPeers, );
   }
 }
 
@@ -24849,14 +25194,15 @@ class ChatBannedRightsObj extends ChatBannedRights {
   final bool sendPlain;
   final bool editRank;
   final bool sendReactions;
+  final bool manageLinkedPeers;
   final int untilDate;
-  ChatBannedRightsObj({this.viewMessages = false, this.sendMessages = false, this.sendMedia = false, this.sendStickers = false, this.sendGifs = false, this.sendGames = false, this.sendInline = false, this.embedLinks = false, this.sendPolls = false, this.changeInfo = false, this.inviteUsers = false, this.pinMessages = false, this.manageTopics = false, this.sendPhotos = false, this.sendVideos = false, this.sendRoundvideos = false, this.sendAudios = false, this.sendVoices = false, this.sendDocs = false, this.sendPlain = false, this.editRank = false, this.sendReactions = false, required this.untilDate, });
+  ChatBannedRightsObj({this.viewMessages = false, this.sendMessages = false, this.sendMedia = false, this.sendStickers = false, this.sendGifs = false, this.sendGames = false, this.sendInline = false, this.embedLinks = false, this.sendPolls = false, this.changeInfo = false, this.inviteUsers = false, this.pinMessages = false, this.manageTopics = false, this.sendPhotos = false, this.sendVideos = false, this.sendRoundvideos = false, this.sendAudios = false, this.sendVoices = false, this.sendDocs = false, this.sendPlain = false, this.editRank = false, this.sendReactions = false, this.manageLinkedPeers = false, required this.untilDate, });
   @override
   int get crc => 0x9f120418;
   @override
   void encode(TlEncoder e) {
     e.writeCrc(crc);
-    int flags = 0 | (viewMessages == true ? (1 << 0) : 0) | (sendMessages == true ? (1 << 1) : 0) | (sendMedia == true ? (1 << 2) : 0) | (sendStickers == true ? (1 << 3) : 0) | (sendGifs == true ? (1 << 4) : 0) | (sendGames == true ? (1 << 5) : 0) | (sendInline == true ? (1 << 6) : 0) | (embedLinks == true ? (1 << 7) : 0) | (sendPolls == true ? (1 << 8) : 0) | (changeInfo == true ? (1 << 10) : 0) | (inviteUsers == true ? (1 << 15) : 0) | (pinMessages == true ? (1 << 17) : 0) | (manageTopics == true ? (1 << 18) : 0) | (sendPhotos == true ? (1 << 19) : 0) | (sendVideos == true ? (1 << 20) : 0) | (sendRoundvideos == true ? (1 << 21) : 0) | (sendAudios == true ? (1 << 22) : 0) | (sendVoices == true ? (1 << 23) : 0) | (sendDocs == true ? (1 << 24) : 0) | (sendPlain == true ? (1 << 25) : 0) | (editRank == true ? (1 << 26) : 0) | (sendReactions == true ? (1 << 27) : 0);
+    int flags = 0 | (viewMessages == true ? (1 << 0) : 0) | (sendMessages == true ? (1 << 1) : 0) | (sendMedia == true ? (1 << 2) : 0) | (sendStickers == true ? (1 << 3) : 0) | (sendGifs == true ? (1 << 4) : 0) | (sendGames == true ? (1 << 5) : 0) | (sendInline == true ? (1 << 6) : 0) | (embedLinks == true ? (1 << 7) : 0) | (sendPolls == true ? (1 << 8) : 0) | (changeInfo == true ? (1 << 10) : 0) | (inviteUsers == true ? (1 << 15) : 0) | (pinMessages == true ? (1 << 17) : 0) | (manageTopics == true ? (1 << 18) : 0) | (sendPhotos == true ? (1 << 19) : 0) | (sendVideos == true ? (1 << 20) : 0) | (sendRoundvideos == true ? (1 << 21) : 0) | (sendAudios == true ? (1 << 22) : 0) | (sendVoices == true ? (1 << 23) : 0) | (sendDocs == true ? (1 << 24) : 0) | (sendPlain == true ? (1 << 25) : 0) | (editRank == true ? (1 << 26) : 0) | (sendReactions == true ? (1 << 27) : 0) | (manageLinkedPeers == true ? (1 << 28) : 0);
     e.writeUint32(flags);
     e.writeInt32(untilDate);
   }
@@ -24884,8 +25230,9 @@ class ChatBannedRightsObj extends ChatBannedRights {
     final sendPlain = (flags & (1 << 25)) != 0;
     final editRank = (flags & (1 << 26)) != 0;
     final sendReactions = (flags & (1 << 27)) != 0;
+    final manageLinkedPeers = (flags & (1 << 28)) != 0;
     final untilDate = d.readInt32();
-    return ChatBannedRightsObj(viewMessages: viewMessages, sendMessages: sendMessages, sendMedia: sendMedia, sendStickers: sendStickers, sendGifs: sendGifs, sendGames: sendGames, sendInline: sendInline, embedLinks: embedLinks, sendPolls: sendPolls, changeInfo: changeInfo, inviteUsers: inviteUsers, pinMessages: pinMessages, manageTopics: manageTopics, sendPhotos: sendPhotos, sendVideos: sendVideos, sendRoundvideos: sendRoundvideos, sendAudios: sendAudios, sendVoices: sendVoices, sendDocs: sendDocs, sendPlain: sendPlain, editRank: editRank, sendReactions: sendReactions, untilDate: untilDate, );
+    return ChatBannedRightsObj(viewMessages: viewMessages, sendMessages: sendMessages, sendMedia: sendMedia, sendStickers: sendStickers, sendGifs: sendGifs, sendGames: sendGames, sendInline: sendInline, embedLinks: embedLinks, sendPolls: sendPolls, changeInfo: changeInfo, inviteUsers: inviteUsers, pinMessages: pinMessages, manageTopics: manageTopics, sendPhotos: sendPhotos, sendVideos: sendVideos, sendRoundvideos: sendRoundvideos, sendAudios: sendAudios, sendVoices: sendVoices, sendDocs: sendDocs, sendPlain: sendPlain, editRank: editRank, sendReactions: sendReactions, manageLinkedPeers: manageLinkedPeers, untilDate: untilDate, );
   }
 }
 
@@ -31447,6 +31794,22 @@ class InputReplyToMonoForum extends InputReplyTo {
   }
 }
 
+class InputReplyToEphemeralMessage extends InputReplyTo {
+  final int id;
+  InputReplyToEphemeralMessage({required this.id, });
+  @override
+  int get crc => 0x4119b95e;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    e.writeInt32(id);
+  }
+  static InputReplyToEphemeralMessage decode(TlDecoder d) {
+    final id = d.readInt32();
+    return InputReplyToEphemeralMessage(id: id, );
+  }
+}
+
 class ExportedStoryLinkObj extends ExportedStoryLink {
   final String link;
   ExportedStoryLinkObj({required this.link, });
@@ -37819,6 +38182,22 @@ class InputAiComposeToneSlug extends InputAiComposeTone {
   }
 }
 
+class InputAiComposeToneSingleUse extends InputAiComposeTone {
+  final String customPrompt;
+  InputAiComposeToneSingleUse({required this.customPrompt, });
+  @override
+  int get crc => 0xe0c35af;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    e.writeString(customPrompt);
+  }
+  static InputAiComposeToneSingleUse decode(TlDecoder d) {
+    final customPrompt = d.readString();
+    return InputAiComposeToneSingleUse(customPrompt: customPrompt, );
+  }
+}
+
 class AiComposeToneObj extends AiComposeTone {
   final bool creator;
   final int id;
@@ -37979,23 +38358,23 @@ class MessagesChatInviteJoinResultOk extends MessagesChatInviteJoinResult {
 
 class MessagesChatInviteJoinResultWebView extends MessagesChatInviteJoinResult {
   final int botId;
-  final WebViewResult webview;
+  final int queryId;
   final List<User> users;
-  MessagesChatInviteJoinResultWebView({required this.botId, required this.webview, required this.users, });
+  MessagesChatInviteJoinResultWebView({required this.botId, required this.queryId, required this.users, });
   @override
-  int get crc => 0x2f51c337;
+  int get crc => 0x61ca29d3;
   @override
   void encode(TlEncoder e) {
     e.writeCrc(crc);
     e.writeInt64(botId);
-    webview.encode(e);
+    e.writeInt64(queryId);
     e.writeCrc(0x1cb5c415); e.writeInt32(users.length); for (final item in users) { item.encode(e); }
   }
   static MessagesChatInviteJoinResultWebView decode(TlDecoder d) {
     final botId = d.readInt64();
-    final webview = decodeObject(d) as WebViewResult;
+    final queryId = d.readInt64();
     final users = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as User); }();
-    return MessagesChatInviteJoinResultWebView(botId: botId, webview: webview, users: users, );
+    return MessagesChatInviteJoinResultWebView(botId: botId, queryId: queryId, users: users, );
   }
 }
 
@@ -38272,6 +38651,196 @@ class RichMessageObj extends RichMessage {
     final photos = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as Photo); }();
     final documents = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as Document); }();
     return RichMessageObj(rtl: rtl, part: part, blocks: blocks, photos: photos, documents: documents, );
+  }
+}
+
+class CommunityPeerObj extends CommunityPeer {
+  final bool canViewHistory;
+  final bool? visible;
+  final Peer peer;
+  CommunityPeerObj({this.canViewHistory = false, this.visible, required this.peer, });
+  @override
+  int get crc => 0x76141ebd;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (canViewHistory == true ? (1 << 2) : 0) | (visible != null ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    if (visible != null) { e.writeBool(visible!); }
+    peer.encode(e);
+  }
+  static CommunityPeerObj decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final canViewHistory = (flags & (1 << 2)) != 0;
+    final bool? visible = (flags & (1 << 0)) != 0 ? d.readBool() : null;
+    final peer = decodeObject(d) as Peer;
+    return CommunityPeerObj(canViewHistory: canViewHistory, visible: visible, peer: peer, );
+  }
+}
+
+class CommunityPeerRequestObj extends CommunityPeerRequest {
+  final bool visible;
+  final Peer peer;
+  final int requestedBy;
+  final int date;
+  CommunityPeerRequestObj({this.visible = false, required this.peer, required this.requestedBy, required this.date, });
+  @override
+  int get crc => 0x7beafa85;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (visible == true ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    peer.encode(e);
+    e.writeInt64(requestedBy);
+    e.writeInt32(date);
+  }
+  static CommunityPeerRequestObj decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final visible = (flags & (1 << 0)) != 0;
+    final peer = decodeObject(d) as Peer;
+    final requestedBy = d.readInt64();
+    final date = d.readInt32();
+    return CommunityPeerRequestObj(visible: visible, peer: peer, requestedBy: requestedBy, date: date, );
+  }
+}
+
+class CommunitiesPeerLinkRequestsObj extends CommunitiesPeerLinkRequests {
+  final int totalCount;
+  final List<CommunityPeerRequest> requests;
+  final String? nextOffset;
+  final List<Chat> chats;
+  final List<User> users;
+  CommunitiesPeerLinkRequestsObj({required this.totalCount, required this.requests, this.nextOffset, required this.chats, required this.users, });
+  @override
+  int get crc => 0x2244afad;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (nextOffset != null ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    e.writeInt32(totalCount);
+    e.writeCrc(0x1cb5c415); e.writeInt32(requests.length); for (final item in requests) { item.encode(e); }
+    if (nextOffset != null) { e.writeString(nextOffset!); }
+    e.writeCrc(0x1cb5c415); e.writeInt32(chats.length); for (final item in chats) { item.encode(e); }
+    e.writeCrc(0x1cb5c415); e.writeInt32(users.length); for (final item in users) { item.encode(e); }
+  }
+  static CommunitiesPeerLinkRequestsObj decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final totalCount = d.readInt32();
+    final requests = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as CommunityPeerRequest); }();
+    final String? nextOffset = (flags & (1 << 0)) != 0 ? d.readString() : null;
+    final chats = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as Chat); }();
+    final users = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as User); }();
+    return CommunitiesPeerLinkRequestsObj(totalCount: totalCount, requests: requests, nextOffset: nextOffset, chats: chats, users: users, );
+  }
+}
+
+class EphemeralMessageObj extends EphemeralMessage {
+  final bool out;
+  final int id;
+  final Peer fromId;
+  final Peer peerId;
+  final int receiverId;
+  final int? topMsgId;
+  final int date;
+  final String message;
+  final List<MessageEntity>? entities;
+  final MessageMedia? media;
+  final ReplyMarkup? replyMarkup;
+  final MessageReplyHeader? replyTo;
+  EphemeralMessageObj({this.out = false, required this.id, required this.fromId, required this.peerId, required this.receiverId, this.topMsgId, required this.date, required this.message, this.entities, this.media, this.replyMarkup, this.replyTo, });
+  @override
+  int get crc => 0xd9c6dc1a;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (out == true ? (1 << 0) : 0) | (topMsgId != null ? (1 << 1) : 0) | (entities != null ? (1 << 2) : 0) | (media != null ? (1 << 3) : 0) | (replyMarkup != null ? (1 << 4) : 0) | (replyTo != null ? (1 << 6) : 0);
+    e.writeUint32(flags);
+    e.writeInt32(id);
+    fromId.encode(e);
+    peerId.encode(e);
+    e.writeInt64(receiverId);
+    if (topMsgId != null) { e.writeInt32(topMsgId!); }
+    e.writeInt32(date);
+    e.writeString(message);
+    if (entities != null) { e.writeCrc(0x1cb5c415); e.writeInt32(entities!.length); for (final item in entities!) { item.encode(e); } }
+    if (media != null) { media!.encode(e); }
+    if (replyMarkup != null) { replyMarkup!.encode(e); }
+    if (replyTo != null) { replyTo!.encode(e); }
+  }
+  static EphemeralMessageObj decode(TlDecoder d) {
+    final flags = d.readUint32();
+    final out = (flags & (1 << 0)) != 0;
+    final id = d.readInt32();
+    final fromId = decodeObject(d) as Peer;
+    final peerId = decodeObject(d) as Peer;
+    final receiverId = d.readInt64();
+    final int? topMsgId = (flags & (1 << 1)) != 0 ? d.readInt32() : null;
+    final date = d.readInt32();
+    final message = d.readString();
+    final List<MessageEntity>? entities = (flags & (1 << 2)) != 0 ? () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as MessageEntity); }() : null;
+    final MessageMedia? media = (flags & (1 << 3)) != 0 ? decodeObject(d) as MessageMedia : null;
+    final ReplyMarkup? replyMarkup = (flags & (1 << 4)) != 0 ? decodeObject(d) as ReplyMarkup : null;
+    final MessageReplyHeader? replyTo = (flags & (1 << 6)) != 0 ? decodeObject(d) as MessageReplyHeader : null;
+    return EphemeralMessageObj(out: out, id: id, fromId: fromId, peerId: peerId, receiverId: receiverId, topMsgId: topMsgId, date: date, message: message, entities: entities, media: media, replyMarkup: replyMarkup, replyTo: replyTo, );
+  }
+}
+
+class CommunitiesParticipantJoinedChatsObj extends CommunitiesParticipantJoinedChats {
+  final List<int> creatorChatIds;
+  final List<int> joinedChatIds;
+  final List<Chat> chats;
+  final List<User> users;
+  CommunitiesParticipantJoinedChatsObj({required this.creatorChatIds, required this.joinedChatIds, required this.chats, required this.users, });
+  @override
+  int get crc => 0x8d78512a;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    e.writeCrc(0x1cb5c415); e.writeInt32(creatorChatIds.length); for (final item in creatorChatIds) { e.writeInt64(item); }
+    e.writeCrc(0x1cb5c415); e.writeInt32(joinedChatIds.length); for (final item in joinedChatIds) { e.writeInt64(item); }
+    e.writeCrc(0x1cb5c415); e.writeInt32(chats.length); for (final item in chats) { item.encode(e); }
+    e.writeCrc(0x1cb5c415); e.writeInt32(users.length); for (final item in users) { item.encode(e); }
+  }
+  static CommunitiesParticipantJoinedChatsObj decode(TlDecoder d) {
+    final creatorChatIds = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => d.readInt64()); }();
+    final joinedChatIds = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => d.readInt64()); }();
+    final chats = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as Chat); }();
+    final users = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as User); }();
+    return CommunitiesParticipantJoinedChatsObj(creatorChatIds: creatorChatIds, joinedChatIds: joinedChatIds, chats: chats, users: users, );
+  }
+}
+
+class MessagesTranslatedRichMessageObj extends MessagesTranslatedRichMessage {
+  final List<RichMessage> result;
+  MessagesTranslatedRichMessageObj({required this.result, });
+  @override
+  int get crc => 0x4203998f;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    e.writeCrc(0x1cb5c415); e.writeInt32(result.length); for (final item in result) { item.encode(e); }
+  }
+  static MessagesTranslatedRichMessageObj decode(TlDecoder d) {
+    final result = () { d.readCrc(); final len = d.readUint32(); return List.generate(len, (_) => decodeObject(d) as RichMessage); }();
+    return MessagesTranslatedRichMessageObj(result: result, );
+  }
+}
+
+class MessagesComposedRichMessageWithAIObj extends MessagesComposedRichMessageWithAI {
+  final RichMessage result;
+  MessagesComposedRichMessageWithAIObj({required this.result, });
+  @override
+  int get crc => 0x4c4537c8;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    result.encode(e);
+  }
+  static MessagesComposedRichMessageWithAIObj decode(TlDecoder d) {
+    final result = decodeObject(d) as RichMessage;
+    return MessagesComposedRichMessageWithAIObj(result: result, );
   }
 }
 

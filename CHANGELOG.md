@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.6
+
+- Updated Telegram API to layer 228 (from TDesktop dev).
+- README rewritten for clarity, with an expanded Flutter integration example.
+
 ## 0.2.5
 
 - New `client.downloadBlock(peer:, msgId:, blockIndex:)` — a streaming-optimized

@@ -3749,6 +3749,7 @@ class MessagesSearchGlobalRequest extends TlObject {
   final bool groupsOnly;
   final bool usersOnly;
   final int? folderId;
+  final InputChannel? community;
   final String q;
   final MessagesFilter filter;
   final int minDate;
@@ -3757,15 +3758,16 @@ class MessagesSearchGlobalRequest extends TlObject {
   final InputPeer offsetPeer;
   final int offsetId;
   final int limit;
-  MessagesSearchGlobalRequest({this.broadcastsOnly = false, this.groupsOnly = false, this.usersOnly = false, this.folderId, required this.q, required this.filter, required this.minDate, required this.maxDate, required this.offsetRate, required this.offsetPeer, required this.offsetId, required this.limit, });
+  MessagesSearchGlobalRequest({this.broadcastsOnly = false, this.groupsOnly = false, this.usersOnly = false, this.folderId, this.community, required this.q, required this.filter, required this.minDate, required this.maxDate, required this.offsetRate, required this.offsetPeer, required this.offsetId, required this.limit, });
   @override
-  int get crc => 0x4bc6589a;
+  int get crc => 0x6126a43c;
   @override
   void encode(TlEncoder e) {
     e.writeCrc(crc);
-    int flags = 0 | (broadcastsOnly == true ? (1 << 1) : 0) | (groupsOnly == true ? (1 << 2) : 0) | (usersOnly == true ? (1 << 3) : 0) | (folderId != null ? (1 << 0) : 0);
+    int flags = 0 | (broadcastsOnly == true ? (1 << 1) : 0) | (groupsOnly == true ? (1 << 2) : 0) | (usersOnly == true ? (1 << 3) : 0) | (folderId != null ? (1 << 0) : 0) | (community != null ? (1 << 4) : 0);
     e.writeUint32(flags);
     if (folderId != null) { e.writeInt32(folderId!); }
+    if (community != null) { community!.encode(e); }
     e.writeString(q);
     filter.encode(e);
     e.writeInt32(minDate);
@@ -7210,6 +7212,66 @@ class MessagesGetRichMessageRequest extends TlObject {
   }
 }
 
+class MessagesTranslateRichMessageRequest extends TlObject {
+  final InputPeer? peer;
+  final List<int>? id;
+  final List<InputRichMessage>? text;
+  final String toLang;
+  final String? tone;
+  MessagesTranslateRichMessageRequest({this.peer, this.id, this.text, required this.toLang, this.tone, });
+  @override
+  int get crc => 0x1a542004;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (peer != null ? (1 << 0) : 0) | (id != null ? (1 << 0) : 0) | (text != null ? (1 << 1) : 0) | (tone != null ? (1 << 2) : 0);
+    e.writeUint32(flags);
+    if (peer != null) { peer!.encode(e); }
+    if (id != null) { e.writeCrc(0x1cb5c415); e.writeInt32(id!.length); for (final item in id!) { e.writeInt32(item); } }
+    if (text != null) { e.writeCrc(0x1cb5c415); e.writeInt32(text!.length); for (final item in text!) { item.encode(e); } }
+    e.writeString(toLang);
+    if (tone != null) { e.writeString(tone!); }
+  }
+}
+
+class MessagesComposeRichMessageWithAIRequest extends TlObject {
+  final bool proofread;
+  final bool emojify;
+  final InputRichMessage? text;
+  final String? translateToLang;
+  final InputAiComposeTone? tone;
+  MessagesComposeRichMessageWithAIRequest({this.proofread = false, this.emojify = false, this.text, this.translateToLang, this.tone, });
+  @override
+  int get crc => 0x8d7ae6af;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (proofread == true ? (1 << 0) : 0) | (emojify == true ? (1 << 3) : 0) | (text != null ? (1 << 4) : 0) | (translateToLang != null ? (1 << 1) : 0) | (tone != null ? (1 << 2) : 0);
+    e.writeUint32(flags);
+    if (text != null) { text!.encode(e); }
+    if (translateToLang != null) { e.writeString(translateToLang!); }
+    if (tone != null) { tone!.encode(e); }
+  }
+}
+
+class MessagesRequestChatJoinWebViewRequest extends TlObject {
+  final int queryId;
+  final DataJSON? themeParams;
+  final String platform;
+  MessagesRequestChatJoinWebViewRequest({required this.queryId, this.themeParams, required this.platform, });
+  @override
+  int get crc => 0xba9ee679;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (themeParams != null ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    e.writeInt64(queryId);
+    if (themeParams != null) { themeParams!.encode(e); }
+    e.writeString(platform);
+  }
+}
+
 class UpdatesGetStateRequest extends TlObject {
   UpdatesGetStateRequest();
   @override
@@ -8085,13 +8147,14 @@ class ChannelsGetAdminedPublicChannelsRequest extends TlObject {
   final bool byLocation;
   final bool checkLimit;
   final bool forPersonal;
-  ChannelsGetAdminedPublicChannelsRequest({this.byLocation = false, this.checkLimit = false, this.forPersonal = false, });
+  final bool forCommunityPeer;
+  ChannelsGetAdminedPublicChannelsRequest({this.byLocation = false, this.checkLimit = false, this.forPersonal = false, this.forCommunityPeer = false, });
   @override
   int get crc => 0xf8b036af;
   @override
   void encode(TlEncoder e) {
     e.writeCrc(crc);
-    int flags = 0 | (byLocation == true ? (1 << 0) : 0) | (checkLimit == true ? (1 << 1) : 0) | (forPersonal == true ? (1 << 2) : 0);
+    int flags = 0 | (byLocation == true ? (1 << 0) : 0) | (checkLimit == true ? (1 << 1) : 0) | (forPersonal == true ? (1 << 2) : 0) | (forCommunityPeer == true ? (1 << 3) : 0);
     e.writeUint32(flags);
   }
 }
@@ -12251,6 +12314,232 @@ class AicomposeGetToneExampleRequest extends TlObject {
     e.writeCrc(crc);
     tone.encode(e);
     e.writeInt32(num);
+  }
+}
+
+class CommunitiesCreateRequest extends TlObject {
+  final bool hidden;
+  final String title;
+  final String? about;
+  final InputPeer peer;
+  CommunitiesCreateRequest({this.hidden = false, required this.title, this.about, required this.peer, });
+  @override
+  int get crc => 0xa63859ec;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (hidden == true ? (1 << 1) : 0) | (about != null ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    e.writeString(title);
+    if (about != null) { e.writeString(about!); }
+    peer.encode(e);
+  }
+}
+
+class CommunitiesTogglePeerLinkRequest extends TlObject {
+  final bool visible;
+  final bool hidden;
+  final bool deleted;
+  final InputChannel community;
+  final InputPeer peer;
+  CommunitiesTogglePeerLinkRequest({this.visible = false, this.hidden = false, this.deleted = false, required this.community, required this.peer, });
+  @override
+  int get crc => 0x736dcfea;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (visible == true ? (1 << 0) : 0) | (hidden == true ? (1 << 1) : 0) | (deleted == true ? (1 << 2) : 0);
+    e.writeUint32(flags);
+    community.encode(e);
+    peer.encode(e);
+  }
+}
+
+class CommunitiesGetJoinedCommunitiesRequest extends TlObject {
+  CommunitiesGetJoinedCommunitiesRequest();
+  @override
+  int get crc => 0xa663e830;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+  }
+}
+
+class CommunitiesToggleCommunityCollapsedInDialogsRequest extends TlObject {
+  final bool collapsed;
+  final InputChannel community;
+  CommunitiesToggleCommunityCollapsedInDialogsRequest({this.collapsed = false, required this.community, });
+  @override
+  int get crc => 0xd766e3ea;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (collapsed == true ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    community.encode(e);
+  }
+}
+
+class CommunitiesGetPeerLinkRequestsRequest extends TlObject {
+  final InputChannel community;
+  final String offset;
+  final int limit;
+  CommunitiesGetPeerLinkRequestsRequest({required this.community, required this.offset, required this.limit, });
+  @override
+  int get crc => 0x93773344;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    community.encode(e);
+    e.writeString(offset);
+    e.writeInt32(limit);
+  }
+}
+
+class CommunitiesTogglePeerLinkRequestApprovalRequest extends TlObject {
+  final bool reject;
+  final InputChannel community;
+  final InputPeer peer;
+  CommunitiesTogglePeerLinkRequestApprovalRequest({this.reject = false, required this.community, required this.peer, });
+  @override
+  int get crc => 0x8c8219a8;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (reject == true ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    community.encode(e);
+    peer.encode(e);
+  }
+}
+
+class CommunitiesToggleAllPeerLinkRequestApprovalRequest extends TlObject {
+  final bool reject;
+  final InputChannel community;
+  CommunitiesToggleAllPeerLinkRequestApprovalRequest({this.reject = false, required this.community, });
+  @override
+  int get crc => 0xbfe3dd3d;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (reject == true ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    community.encode(e);
+  }
+}
+
+class CommunitiesToggleParticipantBannedRequest extends TlObject {
+  final bool unban;
+  final InputChannel community;
+  final InputPeer participant;
+  CommunitiesToggleParticipantBannedRequest({this.unban = false, required this.community, required this.participant, });
+  @override
+  int get crc => 0x9967ad0f;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (unban == true ? (1 << 0) : 0);
+    e.writeUint32(flags);
+    community.encode(e);
+    participant.encode(e);
+  }
+}
+
+class CommunitiesGetParticipantJoinedChatsRequest extends TlObject {
+  final InputChannel community;
+  final InputPeer participant;
+  CommunitiesGetParticipantJoinedChatsRequest({required this.community, required this.participant, });
+  @override
+  int get crc => 0xf87eabab;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    community.encode(e);
+    participant.encode(e);
+  }
+}
+
+class EphemeralSendMessageRequest extends TlObject {
+  final InputPeer peer;
+  final InputUser receiverId;
+  final int? queryId;
+  final String message;
+  final List<MessageEntity>? entities;
+  final InputMedia? media;
+  final ReplyMarkup? replyMarkup;
+  final InputRichMessage? richMessage;
+  final int randomId;
+  final InputReplyTo? replyTo;
+  EphemeralSendMessageRequest({required this.peer, required this.receiverId, this.queryId, required this.message, this.entities, this.media, this.replyMarkup, this.richMessage, required this.randomId, this.replyTo, });
+  @override
+  int get crc => 0x68cbd09f;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (queryId != null ? (1 << 0) : 0) | (entities != null ? (1 << 1) : 0) | (media != null ? (1 << 2) : 0) | (replyMarkup != null ? (1 << 3) : 0) | (richMessage != null ? (1 << 4) : 0) | (replyTo != null ? (1 << 5) : 0);
+    e.writeUint32(flags);
+    peer.encode(e);
+    receiverId.encode(e);
+    if (queryId != null) { e.writeInt64(queryId!); }
+    e.writeString(message);
+    if (entities != null) { e.writeCrc(0x1cb5c415); e.writeInt32(entities!.length); for (final item in entities!) { item.encode(e); } }
+    if (media != null) { media!.encode(e); }
+    if (replyMarkup != null) { replyMarkup!.encode(e); }
+    if (richMessage != null) { richMessage!.encode(e); }
+    e.writeInt64(randomId);
+    if (replyTo != null) { replyTo!.encode(e); }
+  }
+}
+
+class EphemeralDeleteMessageRequest extends TlObject {
+  final InputPeer peer;
+  final InputUser receiverId;
+  final int id;
+  EphemeralDeleteMessageRequest({required this.peer, required this.receiverId, required this.id, });
+  @override
+  int get crc => 0xa3c0d511;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    peer.encode(e);
+    receiverId.encode(e);
+    e.writeInt32(id);
+  }
+}
+
+class EphemeralReportMessageRequest extends TlObject {
+  final InputPeer peer;
+  final int id;
+  final Uint8List option;
+  final String message;
+  EphemeralReportMessageRequest({required this.peer, required this.id, required this.option, required this.message, });
+  @override
+  int get crc => 0x8704f2bf;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    peer.encode(e);
+    e.writeInt32(id);
+    e.writeBytes(option);
+    e.writeString(message);
+  }
+}
+
+class EphemeralGetCallbackAnswerRequest extends TlObject {
+  final InputPeer peer;
+  final int id;
+  final Uint8List? data;
+  EphemeralGetCallbackAnswerRequest({required this.peer, required this.id, this.data, });
+  @override
+  int get crc => 0x3fa464c8;
+  @override
+  void encode(TlEncoder e) {
+    e.writeCrc(crc);
+    int flags = 0 | (data != null ? (1 << 1) : 0);
+    e.writeUint32(flags);
+    peer.encode(e);
+    e.writeInt32(id);
+    if (data != null) { e.writeBytes(data!); }
   }
 }
 
