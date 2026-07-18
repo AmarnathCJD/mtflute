@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 
 import '../crypto/mtproto_crypto.dart';
+import '../crypto/rsa_keys.dart';
 import '../tg/tg.dart';
 import 'client.dart';
 import 'dc_migrate.dart';
@@ -629,6 +630,108 @@ extension FileOperations on MtpClient {
     return sendMedia(peer: peer, media: media, message: caption ?? '');
   }
 
+  Future<Uint8List> downloadWebFile(
+    InputWebFileLocation location, {
+    int? dcId,
+    ProgressCallback? onProgress,
+  }) async {
+    var targetDc = dcId;
+    if (targetDc == null) {
+      final cfg = await invoke(HelpGetConfigRequest());
+      if (cfg is ConfigObj) targetDc = cfg.webfileDcId;
+    }
+    final pool = await _buildPool(this, targetDc ?? dcId ?? this.dcId, 1);
+    try {
+      final out = BytesBuilder(copy: false);
+      var offset = 0;
+      const chunk = _defaultChunkSize;
+      while (true) {
+        final worker = await pool.acquire();
+        UploadWebFileObj part;
+        try {
+          final r = await worker.invoke(
+            UploadGetWebFileRequest(
+              location: location,
+              offset: offset,
+              limit: chunk,
+            ),
+          );
+          if (r is! UploadWebFileObj) {
+            throw StateError('unexpected getWebFile: ${r.runtimeType}');
+          }
+          part = r;
+        } finally {
+          pool.release(worker);
+        }
+        if (part.bytes.isEmpty) break;
+        out.add(part.bytes);
+        offset += part.bytes.length;
+        onProgress?.call(offset, part.size);
+        if (part.bytes.length < chunk || (part.size > 0 && offset >= part.size)) {
+          break;
+        }
+      }
+      return out.toBytes();
+    } finally {
+      await pool.closeAll();
+    }
+  }
+
+  Future<void> loadCdnConfig() async {
+    final r = await invoke(HelpGetCdnConfigRequest());
+    if (r is CdnConfigObj) {
+      for (final k in r.publicKeys) {
+        if (k is CdnPublicKeyObj) {
+          registerCdnPublicKey(k.publicKey);
+        }
+      }
+    }
+  }
+
+  Future<List<FileHashObj>> getFileHashes(
+    InputFileLocation location, {
+    int offset = 0,
+  }) async {
+    final r = await invoke(
+      UploadGetFileHashesRequest(location: location, offset: offset),
+    );
+    if (r is VectorResult) {
+      return r.list.whereType<FileHashObj>().toList();
+    }
+    return const [];
+  }
+
+  bool _matchHash(Uint8List chunk, FileHashObj hash) {
+    final digest = sha256(chunk);
+    if (digest.length != hash.hash.length) return false;
+    for (var i = 0; i < digest.length; i++) {
+      if (digest[i] != hash.hash[i]) return false;
+    }
+    return true;
+  }
+
+  Future<void> _verifyCdnChunk(
+    MtpClient worker,
+    Uint8List fileToken,
+    int offset,
+    Uint8List plain,
+  ) async {
+    final r = await invoke(
+      UploadGetCdnFileHashesRequest(fileToken: fileToken, offset: offset),
+    );
+    if (r is! VectorResult) return;
+    final hashes = r.list.whereType<FileHashObj>().toList();
+    for (final h in hashes) {
+      final start = h.offset - offset;
+      if (start < 0 || start >= plain.length) continue;
+      final end = (start + h.limit).clamp(0, plain.length);
+      final slice = Uint8List.sublistView(plain, start, end);
+      if (slice.length == h.limit && !_matchHash(slice, h)) {
+        throw StateError('CDN chunk hash mismatch at offset ${h.offset}');
+      }
+    }
+  }
+
   Future<Uint8List> _fetchCdnChunk(
     UploadFileCdnRedirect redirect,
     int offset,
@@ -657,12 +760,14 @@ extension FileOperations on MtpClient {
             continue;
           }
           if (r is UploadCdnFileObj) {
-            return _decryptCdn(
+            final plain = _decryptCdn(
               r.bytes,
               redirect.encryptionKey,
               redirect.encryptionIv,
               offset,
             );
+            await _verifyCdnChunk(worker, redirect.fileToken, offset, plain);
+            return plain;
           }
           throw StateError('unexpected cdn response: ${r.runtimeType}');
         } catch (_) {

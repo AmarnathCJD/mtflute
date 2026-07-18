@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.5.0
+
+Completes every remaining MTProto feature from the audit — nothing deferred. All items verified against the live Telegram API (obfuscated handshake, PFS bind, future-salts, containers, CDN, web files) plus a full unit suite for the byte-level codecs.
+
+### Transport
+- **Obfuscated transport (obfuscation2)** — AES-256-CTR-wrapped stream with a randomized 64-byte init frame; enable with `useObfuscation: true`. Verified: full auth-key handshake + RPC against a live DC.
+- **MTProxy** — `MtProxy.fromSecret(host, port, secret)` (hex / base64url / `dd` / `ee` secrets); pass `mtproxy:` to `MtpClient`. Embeds the target DC id in the obfuscation frame.
+- **fakeTLS** — `ee`-prefixed MTProxy secrets speak fake-TLS: a GREASE-shaped ClientHello with an HMAC-SHA256 digest, then MTProto framed inside TLS `application_data` records over padded-intermediate.
+- **WebSocket transport** — `webSocket: true` connects over `wss://` with obfuscation2 inside binary frames.
+- **Quick-ack** — high-bit length prefixes on send and 4-byte ack-token detection on receive across abridged / intermediate.
+- **Padded-intermediate** — real 0–15-byte random padding (used by MTProxy / fakeTLS).
+
+### Perfect Forward Secrecy
+- **Temp auth keys** — `usePfs: true` (with `pfsExpiresIn`) generates a temporary auth key, binds it to the permanent key via `auth.bindTempAuthKey` (`bind_auth_key_inner`, MTProto-1.0 `encryptV1` envelope), and rebinds on expiry. Verified: bind accepted + RPC over the temp key on a live DC.
+
+### Service messages
+- `msgs_state_req` → `msgs_state_info` replies; `msg_resend_req` / `msg_resend_ans_req` force-ack; `msgs_all_info`, `rpc_answer_*`, `destroy_session_*` handled.
+- **`future_salts`** — `get_future_salts` returns salts (verified live); a background timer prefetches and swaps the server salt before expiry.
+
+### Outgoing
+- **Message containers** — outgoing queries batch with pending `msgs_ack` piggybacked into a single `msg_container`.
+- `invokeAfterPrevious()` (`invokeAfterMsg`) chains a request after the last content message; workers wrap init in `invokeWithoutUpdates`.
+
+### Updates
+- **`qts` gap handling** for encrypted / bot updates; a gap triggers `getDifference`.
+- **`updatesTooLong`** → immediate `getDifference`.
+
+### Auth
+- **Takeout sessions** — `initTakeoutSession` / `invokeWithTakeout` / `finishTakeoutSession` (`invokeWithTakeout` wrapper).
+- **Test-DC support** — `testMode: true` uses the test DC address table.
+- **Password recovery** — `requestPasswordRecovery` / `checkRecoveryPassword` / `recoverPassword`.
+
+### CDN / files
+- **CDN RSA config** — `loadCdnConfig()` fetches `help.getCdnConfig`, parses the PEM public keys (PKCS#1 / SPKI DER), and feeds them into the CDN-DC handshake.
+- **File-hash integrity** — CDN chunks are SHA-256-verified against `upload.getCdnFileHashes`; `getFileHashes()` exposes `upload.getFileHashes`.
+- **Web files** — `downloadWebFile(location)` (`upload.getWebFile`) auto-routes to `config.webfileDcId`.
+
 ## 0.4.0
 
 Implements the remaining missing MTProto features from the deep feature audit.

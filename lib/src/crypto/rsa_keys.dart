@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:pointycastle/export.dart';
@@ -6,6 +7,68 @@ import 'mtproto_crypto.dart';
 import '../tl/tl_encoder.dart';
 
 final List<RSAPublicKey> telegramRsaKeys = _buildKeys();
+
+final List<RSAPublicKey> cdnRsaKeys = <RSAPublicKey>[];
+
+void registerCdnPublicKey(String pem) {
+  final key = parseRsaPublicKeyPem(pem);
+  if (key == null) return;
+  final fp = rsaFingerprint(key);
+  for (final existing in cdnRsaKeys) {
+    if (_bytesEqual(rsaFingerprint(existing), fp)) return;
+  }
+  cdnRsaKeys.add(key);
+}
+
+RSAPublicKey? parseRsaPublicKeyPem(String pem) {
+  final b64 = pem
+      .replaceAll('-----BEGIN RSA PUBLIC KEY-----', '')
+      .replaceAll('-----END RSA PUBLIC KEY-----', '')
+      .replaceAll('-----BEGIN PUBLIC KEY-----', '')
+      .replaceAll('-----END PUBLIC KEY-----', '')
+      .replaceAll(RegExp(r'\s'), '');
+  if (b64.isEmpty) return null;
+  final der = base64.decode(b64);
+  final parsed = _parsePkcs1(der);
+  if (parsed != null) return parsed;
+  return _parseSpki(der);
+}
+
+RSAPublicKey? _parsePkcs1(Uint8List der) {
+  try {
+    final p = _Asn1(der);
+    p.expectSequence();
+    final modulus = p.readInteger();
+    final exponent = p.readInteger();
+    return RSAPublicKey(modulus, exponent);
+  } catch (_) {
+    return null;
+  }
+}
+
+RSAPublicKey? _parseSpki(Uint8List der) {
+  try {
+    final p = _Asn1(der);
+    p.expectSequence();
+    p.skipSequence();
+    final bitString = p.readBitString();
+    final inner = _Asn1(bitString);
+    inner.expectSequence();
+    final modulus = inner.readInteger();
+    final exponent = inner.readInteger();
+    return RSAPublicKey(modulus, exponent);
+  } catch (_) {
+    return null;
+  }
+}
+
+bool _bytesEqual(Uint8List a, Uint8List b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
 
 Uint8List rsaFingerprint(RSAPublicKey key) {
   final encoder = TlEncoder();
@@ -20,6 +83,53 @@ List<RSAPublicKey> _buildKeys() {
     final n = bytesToBigInt(Uint8List.fromList(nBytes));
     return RSAPublicKey(n, BigInt.from(65537));
   }).toList();
+}
+
+class _Asn1 {
+  final Uint8List data;
+  int pos = 0;
+  _Asn1(this.data);
+
+  int _readLength() {
+    var len = data[pos++];
+    if (len & 0x80 != 0) {
+      final count = len & 0x7f;
+      len = 0;
+      for (var i = 0; i < count; i++) {
+        len = (len << 8) | data[pos++];
+      }
+    }
+    return len;
+  }
+
+  void expectSequence() {
+    if (data[pos++] != 0x30) throw FormatException('expected SEQUENCE');
+    _readLength();
+  }
+
+  void skipSequence() {
+    if (data[pos++] != 0x30) throw FormatException('expected SEQUENCE');
+    final len = _readLength();
+    pos += len;
+  }
+
+  BigInt readInteger() {
+    if (data[pos++] != 0x02) throw FormatException('expected INTEGER');
+    final len = _readLength();
+    final bytes = Uint8List.sublistView(data, pos, pos + len);
+    pos += len;
+    return bytesToBigInt(bytes);
+  }
+
+  Uint8List readBitString() {
+    if (data[pos++] != 0x03) throw FormatException('expected BIT STRING');
+    final len = _readLength();
+    final unused = data[pos++];
+    final bytes = Uint8List.sublistView(data, pos, pos + len - 1);
+    pos += len - 1;
+    if (unused != 0) throw FormatException('unexpected unused bits');
+    return Uint8List.fromList(bytes);
+  }
 }
 
 const _rsaKeyBytes = <List<int>>[

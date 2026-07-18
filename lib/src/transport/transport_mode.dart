@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 enum TransportModeVariant { abridged, intermediate, paddedIntermediate, full }
 
+final _padRng = Random.secure();
+
 abstract class TransportMode {
-  Future<void> writeMsg(Uint8List data, IOSink sink);
+  Future<void> writeMsg(Uint8List data, IOSink sink, {bool quickAck = false});
   Future<Uint8List> readMsg(Stream<Uint8List> stream);
   Uint8List get announcement;
 
@@ -28,19 +31,21 @@ class AbridgedMode implements TransportMode {
   Uint8List get announcement => Uint8List.fromList([0xef]);
 
   @override
-  Future<void> writeMsg(Uint8List data, IOSink sink) async {
+  Future<void> writeMsg(Uint8List data, IOSink sink,
+      {bool quickAck = false}) async {
     if (data.length % 4 != 0) {
       throw ArgumentError('Message length must be a multiple of 4');
     }
 
     final msgLength = data.length ~/ 4;
     if (msgLength < 0x7f) {
-      sink.add(Uint8List.fromList([msgLength]));
+      final b = quickAck ? (msgLength | 0x80) : msgLength;
+      sink.add(Uint8List.fromList([b]));
     } else {
       final buf = Uint8List(4);
-      ByteData.view(
-        buf.buffer,
-      ).setUint32(0, (msgLength << 8) | 0x7f, Endian.little);
+      var word = (msgLength << 8) | 0x7f;
+      if (quickAck) word |= 0x80000000;
+      ByteData.view(buf.buffer).setUint32(0, word, Endian.little);
       sink.add(buf);
     }
     sink.add(data);
@@ -57,9 +62,12 @@ class IntermediateMode implements TransportMode {
   Uint8List get announcement => Uint8List.fromList([0xee, 0xee, 0xee, 0xee]);
 
   @override
-  Future<void> writeMsg(Uint8List data, IOSink sink) async {
+  Future<void> writeMsg(Uint8List data, IOSink sink,
+      {bool quickAck = false}) async {
     final lengthBuf = Uint8List(4);
-    ByteData.view(lengthBuf.buffer).setUint32(0, data.length, Endian.little);
+    var len = data.length;
+    if (quickAck) len |= 0x80000000;
+    ByteData.view(lengthBuf.buffer).setUint32(0, len, Endian.little);
     sink.add(lengthBuf);
     sink.add(data);
   }
@@ -75,11 +83,20 @@ class PaddedIntermediateMode implements TransportMode {
   Uint8List get announcement => Uint8List.fromList([0xdd, 0xdd, 0xdd, 0xdd]);
 
   @override
-  Future<void> writeMsg(Uint8List data, IOSink sink) async {
+  Future<void> writeMsg(Uint8List data, IOSink sink,
+      {bool quickAck = false}) async {
+    final padLen = _padRng.nextInt(16);
+    final padded = Uint8List(data.length + padLen);
+    padded.setRange(0, data.length, data);
+    for (var i = data.length; i < padded.length; i++) {
+      padded[i] = _padRng.nextInt(256);
+    }
     final lengthBuf = Uint8List(4);
-    ByteData.view(lengthBuf.buffer).setUint32(0, data.length, Endian.little);
+    var len = padded.length;
+    if (quickAck) len |= 0x80000000;
+    ByteData.view(lengthBuf.buffer).setUint32(0, len, Endian.little);
     sink.add(lengthBuf);
-    sink.add(data);
+    sink.add(padded);
   }
 
   @override
@@ -95,7 +112,8 @@ class FullMode implements TransportMode {
   Uint8List get announcement => Uint8List(0);
 
   @override
-  Future<void> writeMsg(Uint8List data, IOSink sink) async {
+  Future<void> writeMsg(Uint8List data, IOSink sink,
+      {bool quickAck = false}) async {
     final length = data.length + 12; // 4 (len) + 4 (seqno) + data + 4 (crc)
     final buf = Uint8List(length);
     final bd = ByteData.view(buf.buffer);

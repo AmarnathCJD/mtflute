@@ -48,7 +48,7 @@ Future<AuthKeyResult> performHandshake({
   }
 
   // Find matching RSA key
-  final keys = telegramRsaKeys;
+  final keys = [...telegramRsaKeys, ...cdnRsaKeys];
   late final RSAPublicKey rsaKey;
   var found = false;
   for (final fp in resPq.fingerprints) {

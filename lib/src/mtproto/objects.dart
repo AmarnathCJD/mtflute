@@ -31,6 +31,16 @@ const crcGzipPacked = 0x3072cfa1;
 const crcMsgDetailedInfo = 0x276d3ec6;
 const crcMsgNewDetailedInfo = 0x809db6df;
 const crcMsgsStateReq = 0xda69fb52;
+const crcMsgsStateInfo = 0x04deb57d;
+const crcMsgsAllInfo = 0x8cc0d131;
+const crcMsgResendReq = 0x7d861a08;
+const crcMsgResendAnsReq = 0x8610baeb;
+const crcDestroySessionOk = 0xe22045fc;
+const crcDestroySessionNone = 0x62d350c9;
+const crcRpcAnswerUnknown = 0x5e2ad36e;
+const crcRpcAnswerDroppedRunning = 0xcd78e586;
+const crcRpcAnswerDropped = 0xa43ad8b7;
+const crcFutureSalts = 0xae500895;
 const crcPingDelayDisconnect = 0xf3427b8c;
 
 class ResPQ {
@@ -218,6 +228,33 @@ Uint8List encodeMsgsAck(List<int> msgIds) {
   for (final id in msgIds) {
     e.writeInt64(id);
   }
+  return e.toBytes();
+}
+
+Uint8List encodeMsgsStateInfo(int reqMsgId, Uint8List info) {
+  final e = TlEncoder();
+  e.writeCrc(crcMsgsStateInfo);
+  e.writeInt64(reqMsgId);
+  e.writeBytes(info);
+  return e.toBytes();
+}
+
+const crcBindAuthKeyInner = 0x75a3f765;
+
+Uint8List encodeBindAuthKeyInner({
+  required int nonce,
+  required int tempAuthKeyId,
+  required int permAuthKeyId,
+  required int tempSessionId,
+  required int expiresAt,
+}) {
+  final e = TlEncoder();
+  e.writeCrc(crcBindAuthKeyInner);
+  e.writeInt64(nonce);
+  e.writeInt64(tempAuthKeyId);
+  e.writeInt64(permAuthKeyId);
+  e.writeInt64(tempSessionId);
+  e.writeInt32(expiresAt);
   return e.toBytes();
 }
 

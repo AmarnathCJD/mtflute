@@ -6,9 +6,12 @@ import 'dart:typed_data';
 import '../crypto/mtproto_crypto.dart';
 import '../crypto/srp.dart';
 import '../transport/tcp_transport.dart';
+import '../transport/transport.dart';
 import '../transport/transport_mode.dart';
 import '../transport/dc_options.dart';
 import '../transport/proxy.dart';
+import '../transport/obfuscation.dart';
+import '../transport/websocket_transport.dart';
 import '../tl/tl_encoder.dart';
 import '../tl/tl_decoder.dart';
 import '../tg/tg.dart';
@@ -26,7 +29,7 @@ import 'events.dart';
 const apiLayer = 228;
 
 /// mtflute library version. Sent as the default `app_version` in initConnection.
-const libVersion = '0.4.0';
+const libVersion = '0.5.0';
 
 /// Async prompt for credentials (OTP, 2FA password). Used by [MtpClient.login].
 typedef InputCallback = Future<String> Function(String prompt);
@@ -38,6 +41,19 @@ typedef MtpRpcError = TgError;
 typedef BoolResult = BoolValue;
 
 class _RetryWithNewSalt implements Exception {}
+
+class _FutureSalt {
+  final int validSince;
+  final int validUntil;
+  final int salt;
+  _FutureSalt(this.validSince, this.validUntil, this.salt);
+}
+
+class _PfsPending {
+  final Uint8List permKey;
+  final Uint8List tempKey;
+  _PfsPending(this.permKey, this.tempKey);
+}
 
 class QrLoginResult {
   final String url;
@@ -90,8 +106,12 @@ class MtpClient {
   /// String session (alternative to file session). See [exportSession].
   final String? stringSession;
 
-  TcpTransport? _transport;
+  Transport? _transport;
   Uint8List? _authKey;
+  Uint8List? _permAuthKey;
+  int _tempExpiresAt = 0;
+  bool _tempKeyBound = false;
+  Timer? _pfsTimer;
   final Map<int, Uint8List> _persistedKeys = {};
   int _serverSalt = 0;
   int _sessionId = 0;
@@ -119,6 +139,13 @@ class MtpClient {
 
   final Proxy? proxy;
 
+  final bool usePfs;
+  final int pfsExpiresIn;
+  final bool testMode;
+  final MtProxy? mtproxy;
+  final bool webSocket;
+  final bool useObfuscation;
+
   MtpClient({
     required this.appId,
     required this.appHash,
@@ -132,6 +159,12 @@ class MtpClient {
     this.sessionFile,
     this.stringSession,
     this.proxy,
+    this.usePfs = false,
+    this.pfsExpiresIn = 86400,
+    this.testMode = false,
+    this.mtproxy,
+    this.webSocket = false,
+    this.useObfuscation = false,
   }) {
     _sessionId = randomBytes(8).buffer.asByteData().getInt64(0, Endian.little);
     _loadSession();
@@ -183,7 +216,7 @@ class MtpClient {
       authKey: _authKey,
       authKeyHash: authKeyHash(_authKey!),
       dcId: dcId,
-      ipAddr: getDcAddress(dcId, ipv6: ipv6),
+      ipAddr: getDcAddress(dcId, ipv6: ipv6, testMode: testMode),
       appId: appId,
       serverSalt: _serverSalt,
       peers: cache.toJson(),
@@ -207,7 +240,7 @@ class MtpClient {
       authKey: _authKey,
       authKeyHash: _authKey != null ? authKeyHash(_authKey!) : null,
       dcId: dcId,
-      ipAddr: getDcAddress(dcId, ipv6: ipv6),
+      ipAddr: getDcAddress(dcId, ipv6: ipv6, testMode: testMode),
       appId: appId,
       serverSalt: _serverSalt,
       dcKeys: Map.of(_persistedKeys),
@@ -270,7 +303,7 @@ class MtpClient {
 
   bool get isConnected => _transport?.isConnected ?? false;
 
-  TcpTransport? get transport => _transport;
+  Transport? get transport => _transport;
 
   bool _pollLoopRunning = false;
   Completer<void>? _connectInFlight;
@@ -296,7 +329,7 @@ class MtpClient {
   }
 
   Future<void> _doConnect() async {
-    final addr = getDcAddress(dcId, ipv6: ipv6);
+    final addr = getDcAddress(dcId, ipv6: ipv6, testMode: testMode);
     final (host, port) = dcHostPort(addr);
 
     final oldTransport = _transport;
@@ -307,13 +340,63 @@ class MtpClient {
       } catch (_) {}
     }
 
-    _transport = TcpTransport(
-      host: host,
-      port: port,
-      modeVariant: TransportModeVariant.abridged,
-      timeout: timeout,
-      proxy: proxy,
-    );
+    if (usePfs && !workerMode) {
+      _tempKeyBound = false;
+      if (_permAuthKey != null) _authKey = _permAuthKey;
+    }
+
+    final mp = mtproxy;
+    if (webSocket) {
+      final wsHost = testMode
+          ? 'apiws-test.telegram.org'
+          : 'apiws.telegram.org';
+      final wsUrl = 'wss://$wsHost/apiws';
+      _transport = WebSocketTransport(
+        url: wsUrl,
+        modeVariant: TransportModeVariant.intermediate,
+        timeout: timeout,
+        obfuscation: ObfuscationConfig(
+          variant: TransportModeVariant.intermediate,
+          dcId: testMode ? -dcId : dcId,
+        ),
+      );
+    } else if (mp != null) {
+      final variant = mp.isFakeTls
+          ? TransportModeVariant.paddedIntermediate
+          : TransportModeVariant.intermediate;
+      _transport = TcpTransport(
+        host: mp.host,
+        port: mp.port,
+        modeVariant: variant,
+        timeout: timeout,
+        fakeTlsDomain: mp.isFakeTls ? mp.fakeTlsDomain : null,
+        fakeTlsSecret: mp.isFakeTls ? mp.rawSecret : null,
+        obfuscation: ObfuscationConfig(
+          variant: variant,
+          secret: mp.rawSecret,
+          dcId: testMode ? -dcId : dcId,
+        ),
+      );
+    } else if (useObfuscation) {
+      _transport = TcpTransport(
+        host: host,
+        port: port,
+        modeVariant: TransportModeVariant.intermediate,
+        timeout: timeout,
+        proxy: proxy,
+        obfuscation: const ObfuscationConfig(
+          variant: TransportModeVariant.intermediate,
+        ),
+      );
+    } else {
+      _transport = TcpTransport(
+        host: host,
+        port: port,
+        modeVariant: TransportModeVariant.abridged,
+        timeout: timeout,
+        proxy: proxy,
+      );
+    }
     await _transport!.connect();
 
     if (_authKey == null) {
@@ -329,12 +412,154 @@ class MtpClient {
       _initialized = false;
     }
 
-    _lastConnectAt = DateTime.now();
+    _PfsPending? pfsPending;
+    if (usePfs && !workerMode && _needsPfs()) {
+      pfsPending = await _generateTempKey();
+    }
 
     if (!_pollLoopRunning) {
       _pollLoopRunning = true;
       unawaited(_pollResponses());
     }
+
+    if (pfsPending != null) {
+      await _bindTempKey(pfsPending);
+    }
+
+    _lastConnectAt = DateTime.now();
+  }
+
+  bool _needsPfs() {
+    if (!_tempKeyBound) return true;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    return _tempExpiresAt <= now + 60;
+  }
+
+  Future<_PfsPending> _generateTempKey() async {
+    final permKey = _permAuthKey ?? _authKey!;
+    _permAuthKey = permKey;
+
+    final temp = await performHandshake(
+      sendAndReceive: _sendUnencrypted,
+      dcId: dcId,
+      expiresIn: pfsExpiresIn + 60,
+    );
+
+    _authKey = temp.authKey;
+    _serverSalt = temp.serverSalt;
+    return _PfsPending(permKey, temp.authKey);
+  }
+
+  Future<void> _bindTempKey(_PfsPending p) async {
+    final tempKeyId =
+        ByteData.view(authKeyHash(p.tempKey).buffer).getInt64(0, Endian.little);
+    final permKeyId =
+        ByteData.view(authKeyHash(p.permKey).buffer).getInt64(0, Endian.little);
+
+    final expiresAt =
+        (DateTime.now().millisecondsSinceEpoch ~/ 1000) + _timeOffset + pfsExpiresIn;
+    final nonce =
+        randomBytes(8).buffer.asByteData().getInt64(0, Endian.little);
+
+    final inner = encodeBindAuthKeyInner(
+      nonce: nonce,
+      tempAuthKeyId: tempKeyId,
+      permAuthKeyId: permKeyId,
+      tempSessionId: _sessionId,
+      expiresAt: expiresAt,
+    );
+
+    final bindMsgId = _genMsgId();
+
+    final plain = TlEncoder();
+    plain.writeRaw(randomBytes(8));
+    plain.writeInt64(_sessionId);
+    plain.writeInt64(bindMsgId);
+    plain.writeInt32(0);
+    plain.writeInt32(inner.length);
+    plain.writeRaw(inner);
+
+    final enc = encryptV1(plain.toBytes(), p.permKey);
+    final envelope = TlEncoder();
+    final permIdBytes = Uint8List(8);
+    ByteData.view(permIdBytes.buffer).setInt64(0, permKeyId, Endian.little);
+    envelope.writeRaw(permIdBytes);
+    envelope.writeRaw(enc.msgKey);
+    envelope.writeRaw(enc.data);
+
+    final res = await _invokeBind(
+      bindMsgId,
+      AuthBindTempAuthKeyRequest(
+        permAuthKeyId: permKeyId,
+        nonce: nonce,
+        expiresAt: expiresAt,
+        encryptedMessage: envelope.toBytes(),
+      ),
+    );
+
+    if (!(res is BoolValue && res.value)) {
+      _authKey = p.permKey;
+      throw StateError('bindTempAuthKey failed: ${res.runtimeType}');
+    }
+
+    _tempExpiresAt = expiresAt;
+    _tempKeyBound = true;
+    logger.info('PFS temp auth key bound, expires in ${pfsExpiresIn}s');
+    _schedulePfsRotation();
+  }
+
+  Future<TlObject> _invokeBind(int msgId, TlObject request) async {
+    final encoder = TlEncoder();
+    request.encode(encoder);
+    final data = encoder.toBytes();
+    final seqNo = _nextSeqNo(contentRelated: true);
+
+    final serialized = serializeEncrypted(
+      msg: data,
+      msgId: msgId,
+      seqNo: seqNo,
+      authKey: _authKey!,
+      serverSalt: _serverSalt,
+      sessionId: _sessionId,
+    );
+
+    final completer = Completer<Uint8List>();
+    _pendingRequests[msgId] = completer;
+
+    final prev = _writeLock;
+    final next = Completer<void>();
+    _writeLock = next.future;
+    await prev;
+    try {
+      await _transport!.writeMsg(serialized);
+    } finally {
+      next.complete();
+    }
+
+    final raw = await completer.future.timeout(timeout, onTimeout: () {
+      _pendingRequests.remove(msgId);
+      throw TimeoutException('bind timed out', timeout);
+    });
+    return _decodeResponse(raw);
+  }
+
+  void _schedulePfsRotation() {
+    _pfsTimer?.cancel();
+    final refreshIn = (pfsExpiresIn * 3 ~/ 4).clamp(60, 86400);
+    _pfsTimer = Timer(Duration(seconds: refreshIn), () {
+      _tempKeyBound = false;
+      unawaited(_rotatePfs().catchError((e) {
+        logger.warn('PFS rotation failed: $e');
+      }));
+    });
+  }
+
+  Future<void> _rotatePfs() async {
+    if (_closing) return;
+    logger.info('PFS temp key expiring — reconnecting to rebind');
+    try {
+      await _transport?.close();
+    } catch (_) {}
   }
 
   Future<void>? _ensureReadyInFlight;
@@ -371,6 +596,9 @@ class MtpClient {
     }
     if (!isConnected) await connect();
     if (!_initialized) {
+      final TlObject innerQuery = workerMode
+          ? InvokeWithoutUpdatesRequest(query: HelpGetConfigRequest())
+          : HelpGetConfigRequest();
       await _sendTlObject(
         InvokeWithLayerRequest(
           layer: apiLayer,
@@ -382,7 +610,7 @@ class MtpClient {
             systemLangCode: langCode,
             langPack: '',
             langCode: langCode,
-            query: HelpGetConfigRequest(),
+            query: innerQuery,
           ),
         ),
       );
@@ -425,6 +653,16 @@ class MtpClient {
   /// (transport drop, reconnect-invalidated pending request, salt refresh).
   /// Server-side RPC errors are never retried — only local disconnects.
   Duration invokeRetryBudget = const Duration(minutes: 2);
+
+  /// Sends [request] ordered strictly after the previous content-related
+  /// request on this connection (`invokeAfterMsg`), so the server processes
+  /// them in submission order.
+  Future<TlObject> invokeAfterPrevious(TlObject request) {
+    if (_lastContentMsgId == 0) return invoke(request);
+    return invoke(
+      InvokeAfterMsgRequest(msgId: _lastContentMsgId, query: request),
+    );
+  }
 
   Future<TlObject> invoke(TlObject request) async {
     if (_closing) throw StateError('Client is closed');
@@ -591,6 +829,7 @@ class MtpClient {
 
   Timer? _pingTimer;
   Timer? _diffTimer;
+  Timer? _saltTimer;
   int _pts = 0;
   int _qts = 0;
   int _date = 0;
@@ -649,6 +888,26 @@ class MtpClient {
     _diffTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       await _runGetDifference();
     });
+
+    _saltTimer?.cancel();
+    _saltTimer = Timer.periodic(const Duration(minutes: 30), (_) async {
+      if (_timersPaused || _closing || !isConnected || _reconnectInProgress ||
+          _migrateInProgress) {
+        return;
+      }
+      try {
+        final r = await invoke(GetFutureSaltsRequest(num: 8));
+        if (r is FutureSaltsObj) {
+          _futureSalts
+            ..clear()
+            ..addAll(r.salts
+                .whereType<FutureSaltObj>()
+                .map((s) => _FutureSalt(s.validSince, s.validUntil, s.salt)));
+          _futureSalts.sort((a, b) => a.validUntil.compareTo(b.validUntil));
+        }
+      } catch (_) {}
+      _swapSaltIfNeeded();
+    });
   }
 
   Future<void> _runGetDifference() async {
@@ -701,6 +960,24 @@ class MtpClient {
     return false;
   }
 
+  bool _advanceQts(int qts) {
+    if (_inDifference) return true;
+    if (qts == 0) return true;
+    if (_qts == 0) {
+      _qts = qts;
+      return true;
+    }
+    if (qts == _qts + 1) {
+      _qts = qts;
+      return true;
+    }
+    if (qts <= _qts) {
+      return false;
+    }
+    unawaited(_runGetDifference());
+    return false;
+  }
+
   void _stopBackgroundTimers() {
     _timersPaused = true;
     _pingTimer?.cancel();
@@ -709,8 +986,8 @@ class MtpClient {
     _diffTimer = null;
     _ackTimer?.cancel();
     _ackTimer = null;
-    // msg_ids are session-scoped; a reconnect starts a fresh session so any
-    // queued acks reference a session the server no longer tracks.
+    _saltTimer?.cancel();
+    _saltTimer = null;
     _pendingAcks.clear();
     _updatesRunning = false;
   }
@@ -864,6 +1141,103 @@ class MtpClient {
     final inputPwd = _computeSrpPassword(password, pwd);
     return (await invoke(AuthCheckPasswordRequest(password: inputPwd)))
         as AuthAuthorization;
+  }
+
+  Future<String> requestPasswordRecovery() async {
+    final r = await invoke(AuthRequestPasswordRecoveryRequest());
+    if (r is AuthPasswordRecoveryObj) return r.emailPattern;
+    throw StateError('unexpected requestPasswordRecovery: ${r.runtimeType}');
+  }
+
+  Future<bool> checkRecoveryPassword(String code) async {
+    final r = await invoke(AuthCheckRecoveryPasswordRequest(code: code));
+    return r is BoolValue ? r.value : false;
+  }
+
+  Future<AuthAuthorization> recoverPassword(String code,
+      {String? newPassword, String hint = ''}) async {
+    AccountPasswordInputSettings? settings;
+    if (newPassword != null && newPassword.isNotEmpty) {
+      final pwd =
+          (await invoke(AccountGetPasswordRequest())) as AccountPasswordObj;
+      final newAlgo = pwd.newAlgo;
+      if (newAlgo
+          is! PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow) {
+        throw StateError('Unsupported new password algorithm: ${newAlgo.runtimeType}');
+      }
+      final digest = computeDigest(
+        newPassword: newPassword,
+        algoSalt1: newAlgo.salt1,
+        salt2: newAlgo.salt2,
+        g: newAlgo.g,
+        p: newAlgo.p,
+      );
+      settings = AccountPasswordInputSettingsObj(
+        newAlgo:
+            PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow(
+          salt1: digest.salt1,
+          salt2: newAlgo.salt2,
+          g: newAlgo.g,
+          p: newAlgo.p,
+        ),
+        newPasswordHash: digest.newPasswordHash,
+        hint: hint,
+      );
+    }
+    final r = await invoke(
+      AuthRecoverPasswordRequest(code: code, newSettings: settings),
+    );
+    return r as AuthAuthorization;
+  }
+
+  int? _takeoutId;
+
+  Future<int> initTakeoutSession({
+    bool contacts = false,
+    bool messageUsers = false,
+    bool messageChats = false,
+    bool messageMegagroups = false,
+    bool messageChannels = false,
+    bool files = false,
+    int? fileMaxSize,
+  }) async {
+    final r = await invoke(
+      AccountInitTakeoutSessionRequest(
+        contacts: contacts,
+        messageUsers: messageUsers,
+        messageChats: messageChats,
+        messageMegagroups: messageMegagroups,
+        messageChannels: messageChannels,
+        files: files,
+        fileMaxSize: fileMaxSize,
+      ),
+    );
+    if (r is AccountTakeoutObj) {
+      _takeoutId = r.id;
+      return r.id;
+    }
+    throw StateError('unexpected initTakeoutSession: ${r.runtimeType}');
+  }
+
+  Future<TlObject> invokeWithTakeout(TlObject query, {int? takeoutId}) async {
+    final id = takeoutId ?? _takeoutId;
+    if (id == null) {
+      throw StateError('no takeout session; call initTakeoutSession first');
+    }
+    return invoke(InvokeWithTakeoutRequest(takeoutId: id, query: query));
+  }
+
+  Future<bool> finishTakeoutSession({bool success = true}) async {
+    final id = _takeoutId;
+    if (id == null) return false;
+    final r = await invoke(
+      InvokeWithTakeoutRequest(
+        takeoutId: id,
+        query: AccountFinishTakeoutSessionRequest(success: success),
+      ),
+    );
+    _takeoutId = null;
+    return r is BoolValue ? r.value : true;
   }
 
   InputCheckPasswordSRP _computeSrpPassword(
@@ -1220,6 +1594,11 @@ class MtpClient {
   bool _inDifference = false;
 
   void _dispatchUpdate(TlObject update) {
+    if (update is UpdatesTooLong) {
+      unawaited(_runGetDifference());
+      return;
+    }
+
     if (!_inDifference && !_commonBoxOk(update)) return;
 
     for (final handler in _updateHandlers) {
@@ -1239,6 +1618,7 @@ class MtpClient {
     }
 
     if (update is UpdateNewEncryptedMessage) {
+      if (!_advanceQts(update.qts)) return;
       for (final h in newEncryptedMessageHandlers) {
         h(update);
       }
@@ -1493,6 +1873,33 @@ class MtpClient {
 
   Future<void> _writeLock = Future.value();
 
+  Uint8List _wrapMessage(int msgId, int seqNo, Uint8List body) {
+    final e = TlEncoder();
+    e.writeInt64(msgId);
+    e.writeInt32(seqNo);
+    e.writeInt32(body.length);
+    e.writeRaw(body);
+    return e.toBytes();
+  }
+
+  Uint8List _buildContainer(List<(int, int, Uint8List)> msgs) {
+    final inner = TlEncoder();
+    for (final m in msgs) {
+      inner.writeInt64(m.$1);
+      inner.writeInt32(m.$2);
+      inner.writeInt32(m.$3.length);
+      inner.writeRaw(m.$3);
+    }
+    final container = TlEncoder();
+    container.writeCrc(crcMessageContainer);
+    container.writeUint32(msgs.length);
+    container.writeRaw(inner.toBytes());
+
+    final containerMsgId = _genMsgId();
+    final containerSeqNo = _nextSeqNo(contentRelated: false);
+    return _wrapMessage(containerMsgId, containerSeqNo, container.toBytes());
+  }
+
   Future<Uint8List> _sendRawRequest(Uint8List data) async {
     if (_transport == null || !_transport!.isConnected) {
       throw StateError('Not connected');
@@ -1500,11 +1907,26 @@ class MtpClient {
 
     final msgId = _genMsgId();
     final seqNo = _nextSeqNo(contentRelated: true);
+    _lastContentMsgId = msgId;
 
-    final serialized = serializeEncrypted(
-      msg: data,
-      msgId: msgId,
-      seqNo: seqNo,
+    Uint8List body;
+    if (_pendingAcks.isNotEmpty) {
+      final ackIds = _pendingAcks.toList();
+      _pendingAcks.clear();
+      _ackTimer?.cancel();
+      _ackTimer = null;
+      final ackMsgId = _genMsgId();
+      final ackSeqNo = _nextSeqNo(contentRelated: false);
+      body = _buildContainer([
+        (ackMsgId, ackSeqNo, encodeMsgsAck(ackIds)),
+        (msgId, seqNo, data),
+      ]);
+    } else {
+      body = _wrapMessage(msgId, seqNo, data);
+    }
+
+    final serialized = serializeEncryptedRaw(
+      body: body,
       authKey: _authKey!,
       serverSalt: _serverSalt,
       sessionId: _sessionId,
@@ -1817,9 +2239,38 @@ class MtpClient {
       case crcMsgsStateReq:
         d.readCrc(); // vector
         final n = d.readUint32();
+        final ids = <int>[];
+        for (var i = 0; i < n; i++) {
+          ids.add(d.readInt64());
+        }
+        final info = Uint8List(ids.length);
+        for (var i = 0; i < ids.length; i++) {
+          info[i] = _pendingAcks.contains(ids[i]) ? 0x04 : 0x01;
+        }
+        unawaited(_fireAndForgetRaw(encodeMsgsStateInfo(outerMsgId, info)));
+        return true;
+
+      case crcMsgResendReq || crcMsgResendAnsReq:
+        d.readCrc(); // vector
+        final n = d.readUint32();
         for (var i = 0; i < n; i++) {
           _forceAck(d.readInt64());
         }
+        return true;
+
+      case crcMsgsAllInfo:
+        return true;
+
+      case crcRpcAnswerUnknown ||
+            crcRpcAnswerDroppedRunning ||
+            crcRpcAnswerDropped:
+        return true;
+
+      case crcDestroySessionOk || crcDestroySessionNone:
+        return true;
+
+      case crcFutureSalts:
+        _applyFutureSalts(d);
         return true;
 
       case crcMsgsAck || crcPong:
@@ -1827,6 +2278,55 @@ class MtpClient {
 
       default:
         return false;
+    }
+  }
+
+  final _futureSalts = <_FutureSalt>[];
+
+  void _applyFutureSalts(TlDecoder d) {
+    final reqMsgId = d.readInt64();
+    final now = d.readInt32();
+    final count = d.readUint32();
+    _futureSalts.clear();
+    final salts = <_FutureSalt>[];
+    for (var i = 0; i < count; i++) {
+      final validSince = d.readInt32();
+      final validUntil = d.readInt32();
+      final salt = d.readInt64();
+      salts.add(_FutureSalt(validSince, validUntil, salt));
+    }
+    _futureSalts.addAll(salts);
+    _futureSalts.sort((a, b) => a.validUntil.compareTo(b.validUntil));
+
+    final pending = _pendingRequests.remove(reqMsgId);
+    if (pending != null && !pending.isCompleted) {
+      final e = TlEncoder();
+      e.writeCrc(crcFutureSalts);
+      e.writeInt64(reqMsgId);
+      e.writeInt32(now);
+      e.writeCrc(crcVector);
+      e.writeUint32(count);
+      for (final s in salts) {
+        e.writeCrc(0x949d9dc);
+        e.writeInt32(s.validSince);
+        e.writeInt32(s.validUntil);
+        e.writeInt64(s.salt);
+      }
+      pending.complete(e.toBytes());
+    }
+  }
+
+  void _swapSaltIfNeeded() {
+    if (_futureSalts.isEmpty) return;
+    final now = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + _timeOffset;
+    for (final s in _futureSalts) {
+      if (s.validSince <= now && now < s.validUntil) {
+        if (_serverSalt != s.salt) {
+          _serverSalt = s.salt;
+          _saveSession();
+        }
+        return;
+      }
     }
   }
 
@@ -1907,6 +2407,7 @@ class MtpClient {
   }
 
   int _lastMsgId = 0;
+  int _lastContentMsgId = 0;
 
   int _genMsgId() {
     // Port of gogram's NewMsgIDGenerator (utils.go):
@@ -1937,6 +2438,8 @@ class MtpClient {
     _closing = true;
     _saveDebounce?.cancel();
     _saveDebounce = null;
+    _pfsTimer?.cancel();
+    _pfsTimer = null;
     _stopBackgroundTimers();
     _updatesRunning = false;
     if (!(_idleCompleter?.isCompleted ?? true)) {

@@ -59,6 +59,30 @@ Uint8List serializeEncrypted({
   return outer.toBytes();
 }
 
+Uint8List serializeEncryptedRaw({
+  required Uint8List body,
+  required Uint8List authKey,
+  required int serverSalt,
+  required int sessionId,
+}) {
+  final inner = TlEncoder();
+
+  final saltBytes = Uint8List(8);
+  ByteData.view(saltBytes.buffer).setInt64(0, serverSalt, Endian.little);
+  inner.writeRaw(saltBytes);
+
+  inner.writeInt64(sessionId);
+  inner.writeRaw(body);
+
+  final encrypted = encryptMessage(inner.toBytes(), authKey);
+
+  final outer = TlEncoder();
+  outer.writeRaw(authKeyHash(authKey));
+  outer.writeRaw(encrypted.msgKey);
+  outer.writeRaw(encrypted.data);
+  return outer.toBytes();
+}
+
 MtpMessage deserializeEncrypted(Uint8List data, Uint8List authKey) {
   final d = TlDecoder(data);
 
