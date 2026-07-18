@@ -1,6 +1,6 @@
 name: mtflute
 description: Pure-Dart Telegram MTProto client (API layer 228) with a built-in HTTP streaming engine for mediakit / video players.
-version: 0.2.6
+version: 0.2.7
 homepage: https://github.com/amarnathcjd/mtflute
 repository: https://github.com/amarnathcjd/mtflute
 issue_tracker: https://github.com/amarnathcjd/mtflute/issues

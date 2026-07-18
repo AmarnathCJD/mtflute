@@ -7,12 +7,14 @@ class Logger {
   LogLevel level;
   IOSink? sink;
   bool useColor;
+  bool showTimestamp;
 
   Logger({
     this.prefix = 'mtflute',
     this.level = LogLevel.info,
     this.sink,
     this.useColor = true,
+    this.showTimestamp = true,
   });
 
   static final Logger root = Logger();
@@ -22,6 +24,7 @@ class Logger {
     level: level,
     sink: sink,
     useColor: useColor,
+    showTimestamp: showTimestamp,
   );
 
   void trace(String msg) => _log(LogLevel.trace, msg);
@@ -37,12 +40,20 @@ class Logger {
   void _log(LogLevel l, String msg) {
     if (l.index < level.index) return;
     final tag = _tag(l);
-    final out = '[$tag] $prefix: $msg';
+    final ts = showTimestamp ? '${_now()} ' : '';
+    final out = '$ts[$tag] $prefix: $msg';
     if (sink != null) {
       sink!.writeln(out);
     } else {
       stderr.writeln(out);
     }
+  }
+
+  static String _now() {
+    final n = DateTime.now();
+    String p2(int v) => v.toString().padLeft(2, '0');
+    String p3(int v) => v.toString().padLeft(3, '0');
+    return '${p2(n.hour)}:${p2(n.minute)}:${p2(n.second)}.${p3(n.millisecond)}';
   }
 
   String _tag(LogLevel l) {

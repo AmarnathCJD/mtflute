@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.7
+
+- Logger now prefixes each line with a `HH:MM:SS.mmm` timestamp by default. Disable via `Logger(showTimestamp: false)`.
+
 ## 0.2.6
 
 - Updated Telegram API to layer 228 (from TDesktop dev).
